@@ -118,20 +118,30 @@
                 <h1 class="text-2xl font-extrabold text-gray-900 dark:text-white">Banco de Horas</h1>
                 <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Entre para acessar seu painel</p>
             </div>
-            <form id="login-form" class="space-y-4">
+            <p id="login-loading" class="text-sm text-gray-500 dark:text-gray-400 text-center mb-4">Verificando sua sessão...</p>
+            <form id="login-form" class="hidden space-y-4">
                 <div>
                     <label for="login-email" class="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">E-mail</label>
                     <input id="login-email" type="email" autocomplete="username" required class="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-white custom-rounded" placeholder="seu@email.com">
                 </div>
                 <div>
                     <label for="login-password" class="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">Senha</label>
-                    <input id="login-password" type="password" autocomplete="current-password" required class="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-white custom-rounded" placeholder="Sua senha">
+                    <div class="relative">
+                        <input id="login-password" type="password" autocomplete="current-password" required class="w-full p-3 pr-12 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-white custom-rounded" placeholder="Sua senha">
+                        <button type="button" onclick="togglePasswordVisibility('login-password', this)" class="absolute inset-y-0 right-0 px-3 text-gray-400 hover:text-indigo-600" aria-label="Mostrar senha">👁</button>
+                    </div>
                 </div>
                 <button id="login-submit" type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md custom-rounded">Entrar</button>
+                <button type="button" onclick="resetPassword()" class="w-full text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">Esqueci minha senha</button>
                 <p id="login-error" class="hidden text-sm text-red-600 dark:text-red-400 text-center"></p>
             </form>
             <p class="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-5">Acesso liberado somente pelo administrador.</p>
         </div>
+    </div>
+
+    <button id="menu-toggle" onclick="toggleAppMenu(event)" class="hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-white dark:bg-gray-800 shadow-md hover:shadow-lg text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 transition-all" aria-label="Abrir menu">☰</button>
+    <div id="app-menu" class="hidden fixed top-16 left-4 z-50 w-48 bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 p-2 custom-rounded">
+        <button id="renewal-menu-item" onclick="openRenewalMenu()" class="hidden w-full text-left px-3 py-2 text-sm font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 custom-rounded">Renovação</button>
     </div>
 
     <button onclick="toggleDarkMode()" class="fixed top-4 right-4 z-50 p-2 rounded-full bg-white dark:bg-gray-800 shadow-md hover:shadow-lg text-gray-800 dark:text-yellow-400 border border-gray-200 dark:border-gray-700 transition-all">
@@ -148,22 +158,48 @@
             <p id="auth-status" class="text-xs font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 inline-block px-3 py-1 rounded-full shadow-md border border-gray-200 dark:border-gray-700">
                 Faça login
             </p>
+            <p id="expiry-countdown" class="hidden text-xs font-bold text-red-600 dark:text-red-400 mt-2"></p>
             <button id="logout-btn" onclick="logoutApp()" class="hidden ml-2 text-xs font-bold text-red-500 hover:text-red-700">Sair</button>
             <div id="error-message" class="hidden mx-auto mt-4 max-w-md bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-300 p-4 text-sm rounded-r shadow-sm text-left custom-rounded" role="alert"></div>
         </header>
 
-        <section id="manual-payment-card" class="hidden mb-6 max-w-md mx-auto bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 p-5 shadow-md custom-rounded">
-            <div class="flex items-center justify-between mb-2">
-                <h2 class="text-sm font-extrabold text-indigo-800 dark:text-indigo-200">Renovar acesso</h2>
-                <span class="text-lg font-extrabold text-indigo-700 dark:text-indigo-300">R$ 19,90</span>
+        <section id="manual-payment-card" class="hidden mb-6 max-w-md mx-auto overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-xl border border-white/10 custom-rounded">
+            <div class="p-5">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 2v20m10-10H2m17.07-7.07L4.93 19.07M19.07 19.07L4.93 4.93"></path></svg>
+                        </div>
+                        <div>
+                            <p class="text-[10px] uppercase tracking-[0.18em] font-bold text-white/70">Renovação</p>
+                            <h2 class="text-base font-extrabold">Plano mensal</h2>
+                        </div>
+                    </div>
+                    <span class="px-2.5 py-1 rounded-full bg-white/15 border border-white/20 text-[10px] font-bold whitespace-nowrap">+30 dias</span>
+                </div>
+
+                <div class="flex items-end justify-between gap-3 mt-6">
+                    <div>
+                        <p class="text-xs text-white/70">Pagamento via Pix</p>
+                        <p class="text-3xl font-black tracking-tight">R$ 19,90</p>
+                    </div>
+                    <p class="max-w-[145px] text-right text-[10px] leading-relaxed text-white/75">Após pagar, avise o administrador para liberar a renovação.</p>
+                </div>
+
+                <div class="mt-5 rounded-2xl bg-black/20 border border-white/15 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] uppercase tracking-wider font-bold text-white/65">Chave Pix · e-mail</span>
+                        <span class="text-[10px] font-bold text-white/60">Copie e pague</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span id="pix-key-display" class="flex-1 text-sm font-bold break-all">kendrio.123t@gmail.com</span>
+                        <button onclick="copyPixKey()" id="copy-pix-btn" class="shrink-0 w-10 h-10 rounded-xl bg-white text-indigo-700 hover:bg-indigo-50 flex items-center justify-center shadow-md" aria-label="Copiar chave Pix">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 7V5a2 2 0 012-2h7l4 4v10a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7H8zm7-4v4h4"></path></svg>
+                        </button>
+                    </div>
+                </div>
+                <p id="pix-copy-message" class="hidden text-xs text-center text-emerald-200 mt-3 font-bold">Chave Pix copiada.</p>
             </div>
-            <p class="text-xs text-indigo-700 dark:text-indigo-300 mb-3">Faça o Pix abaixo e avise o administrador para liberar mais 30 dias.</p>
-            <div class="bg-white dark:bg-gray-800 p-3 border border-indigo-200 dark:border-indigo-700 custom-rounded">
-                <span class="block text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 mb-1">Chave Pix (e-mail)</span>
-                <span id="pix-key-display" class="block text-sm font-bold text-gray-800 dark:text-gray-100 break-all">kendrio.123t@gmail.com</span>
-            </div>
-            <button onclick="copyPixKey()" id="copy-pix-btn" class="w-full mt-3 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm custom-rounded">Copiar chave Pix</button>
-            <p id="pix-copy-message" class="hidden text-xs text-green-600 dark:text-green-400 text-center mt-2">Chave Pix copiada.</p>
         </section>
 
         <div class="mb-6 max-w-md mx-auto">
@@ -349,7 +385,10 @@
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <input id="customer-email-input" type="email" placeholder="E-mail do cliente" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
-                <input id="customer-password-input" type="password" placeholder="Senha inicial" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
+                <div class="relative">
+                    <input id="customer-password-input" type="password" placeholder="Senha inicial" class="w-full p-2.5 pr-10 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
+                    <button type="button" onclick="togglePasswordVisibility('customer-password-input', this)" class="absolute inset-y-0 right-0 px-2 text-gray-400 hover:text-indigo-600" aria-label="Mostrar senha">👁</button>
+                </div>
                 <input id="customer-days-input" type="number" min="1" value="30" placeholder="Dias" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
             </div>
             <button id="create-customer-btn" onclick="createCustomerAccount()" class="w-full mt-3 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow-md custom-rounded">Criar acesso por 30 dias</button>
@@ -530,7 +569,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { initializeAuth, browserLocalPersistence, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, addDoc, deleteDoc, writeBatch, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const ADMIN_EMAIL = 'kendrioclaudio199@gmail.com';
@@ -571,6 +610,7 @@
         
         let editingRecordId = null;
         let parsedImportData = [];
+        let expiryTimer = null;
 
         const LOCAL_STORAGE_KEY = 'overtime_auth_token_v7_inline';
         const RADIUS_STORAGE_KEY = 'overtime_radius_pref';
@@ -618,11 +658,16 @@
         const errorEl = document.getElementById('error-message');
         const loginScreen = document.getElementById('login-screen');
         const loginForm = document.getElementById('login-form');
+        const loginLoading = document.getElementById('login-loading');
         const loginEmailInput = document.getElementById('login-email');
         const loginPasswordInput = document.getElementById('login-password');
         const loginSubmit = document.getElementById('login-submit');
         const loginError = document.getElementById('login-error');
+        const menuToggle = document.getElementById('menu-toggle');
+        const appMenu = document.getElementById('app-menu');
+        const renewalMenuItem = document.getElementById('renewal-menu-item');
         const logoutBtn = document.getElementById('logout-btn');
+        const expiryCountdown = document.getElementById('expiry-countdown');
         const adminPanel = document.getElementById('admin-panel');
         const customerEmailInput = document.getElementById('customer-email-input');
         const customerPasswordInput = document.getElementById('customer-password-input');
@@ -814,11 +859,21 @@
 
         function setLoginError(message) {
             loginError.textContent = message;
-            loginError.classList.toggle('hidden', !message);
+            loginError.className = message
+                ? 'text-sm text-red-600 dark:text-red-400 text-center'
+                : 'hidden text-sm text-red-600 dark:text-red-400 text-center';
         }
 
         function showLoginScreen(message = '') {
+            if (expiryTimer) clearInterval(expiryTimer);
+            expiryTimer = null;
+            expiryCountdown.classList.add('hidden');
             loginScreen.classList.remove('hidden');
+            loginLoading.classList.add('hidden');
+            loginForm.classList.remove('hidden');
+            menuToggle.classList.add('hidden');
+            appMenu.classList.add('hidden');
+            renewalMenuItem.classList.add('hidden');
             logoutBtn.classList.add('hidden');
             adminPanel.classList.add('hidden');
             manualPaymentCard.classList.add('hidden');
@@ -826,10 +881,45 @@
         }
 
         function hideLoginScreen() {
+            loginLoading.classList.add('hidden');
+            loginForm.classList.add('hidden');
+            menuToggle.classList.remove('hidden');
             loginScreen.classList.add('hidden');
             logoutBtn.classList.remove('hidden');
             setLoginError('');
         }
+
+        window.toggleAppMenu = function(event) {
+            if (event) event.stopPropagation();
+            // Se a área de renovação estiver aberta, o mesmo botão a fecha.
+            if (!manualPaymentCard.classList.contains('hidden')) {
+                manualPaymentCard.classList.add('hidden');
+                appMenu.classList.add('hidden');
+                return;
+            }
+            appMenu.classList.toggle('hidden');
+        };
+
+        document.addEventListener('click', (event) => {
+            if (!appMenu.contains(event.target) && event.target !== menuToggle) {
+                appMenu.classList.add('hidden');
+            }
+        });
+
+        window.togglePasswordVisibility = function(inputId, button) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            const showing = input.type === 'text';
+            input.type = showing ? 'password' : 'text';
+            button.textContent = showing ? '👁' : '🙈';
+            button.setAttribute('aria-label', showing ? 'Mostrar senha' : 'Ocultar senha');
+        };
+
+        window.openRenewalMenu = function() {
+            appMenu.classList.add('hidden');
+            manualPaymentCard.classList.remove('hidden');
+            manualPaymentCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
 
         window.logoutApp = async function() {
             if (auth) await signOut(auth);
@@ -860,6 +950,33 @@
             return Number.isNaN(date.getTime()) ? null : date;
         }
 
+        function startExpiryCountdown(expiration) {
+            if (expiryTimer) clearInterval(expiryTimer);
+            const updateCountdown = async () => {
+                const remaining = expiration.getTime() - Date.now();
+                if (remaining <= 0) {
+                    clearInterval(expiryTimer);
+                    expiryTimer = null;
+                    expiryCountdown.classList.add('hidden');
+                    if (auth && auth.currentUser) await signOut(auth);
+                    showLoginScreen('Seu acesso expirou. Fale com o administrador para renovar.');
+                    return;
+                }
+                if (remaining <= 24 * 60 * 60 * 1000) {
+                    const totalSeconds = Math.floor(remaining / 1000);
+                    const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+                    const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+                    const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+                    expiryCountdown.textContent = `Acesso expira em ${hours}:${minutes}:${seconds}`;
+                    expiryCountdown.classList.remove('hidden');
+                } else {
+                    expiryCountdown.classList.add('hidden');
+                }
+            };
+            updateCountdown();
+            expiryTimer = setInterval(updateCountdown, 1000);
+        }
+
         async function startAuthenticatedSession(user) {
             const isAdmin = (user.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase();
             let profile = null;
@@ -881,8 +998,16 @@
                 ? 'text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 inline-block px-3 py-1 rounded-full shadow-md border border-amber-300 dark:border-amber-700'
                 : 'text-xs font-medium text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 inline-block px-3 py-1 rounded-full shadow-md border border-green-300 dark:border-green-700';
             adminPanel.classList.toggle('hidden', !isAdmin);
-            manualPaymentCard.classList.toggle('hidden', isAdmin);
-            if (isAdmin) loadCustomers();
+            menuToggle.classList.toggle('hidden', isAdmin);
+            manualPaymentCard.classList.add('hidden');
+            renewalMenuItem.classList.toggle('hidden', isAdmin);
+            if (isAdmin) {
+                if (expiryTimer) clearInterval(expiryTimer);
+                expiryCountdown.classList.add('hidden');
+                loadCustomers();
+            } else {
+                startExpiryCountdown(toDate(profile.expiresAt));
+            }
             hideLoginScreen();
             listenForSettings(user.uid);
             listenForRecords(user.uid);
@@ -915,6 +1040,22 @@
                 loginSubmit.textContent = 'Entrar';
             }
         });
+
+        window.resetPassword = async function() {
+            const email = loginEmailInput.value.trim();
+            if (!email) {
+                setLoginError('Digite seu e-mail acima para receber o link de redefinição.');
+                return;
+            }
+            try {
+                await sendPasswordResetEmail(auth, email);
+                loginError.textContent = 'Enviamos um link de redefinição para seu e-mail.';
+                loginError.className = 'text-sm text-green-600 dark:text-green-400 text-center';
+            } catch (error) {
+                console.error('Falha ao enviar redefinição:', error);
+                setLoginError('Não foi possível enviar o link. Confira o e-mail.');
+            }
+        };
 
         function escapeHtml(value) {
             return String(value || '').replace(/[&<>'"]/g, char => ({
@@ -1476,7 +1617,7 @@
             db = getFirestore(app);
             // O arquivo pode ser aberto pelo visualizador do WhatsApp (content://).
             // A persistência em memória evita travamentos de IndexedDB nesse ambiente.
-            auth = initializeAuth(app, { persistence: inMemoryPersistence });
+            auth = initializeAuth(app, { persistence: browserLocalPersistence });
 
             onAuthStateChanged(auth, async (user) => {
                 if (!user) {
