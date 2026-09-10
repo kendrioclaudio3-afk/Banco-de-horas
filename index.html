@@ -383,13 +383,17 @@
                 </div>
                 <span class="text-[10px] font-bold px-2 py-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">ADMIN</span>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <input id="customer-email-input" type="email" placeholder="E-mail do cliente" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
                 <div class="relative">
                     <input id="customer-password-input" type="password" placeholder="Senha inicial" class="w-full p-2.5 pr-10 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
                     <button type="button" onclick="togglePasswordVisibility('customer-password-input', this)" class="absolute inset-y-0 right-0 px-2 text-gray-400 hover:text-indigo-600" aria-label="Mostrar senha">👁</button>
                 </div>
-                <input id="customer-days-input" type="number" min="1" value="30" placeholder="Dias" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
+                <input id="customer-days-input" type="number" min="1" value="30" placeholder="Quantidade" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
+                <select id="customer-duration-unit" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
+                    <option value="days">Dias</option>
+                    <option value="hours">Horas</option>
+                </select>
             </div>
             <button id="create-customer-btn" onclick="createCustomerAccount()" class="w-full mt-3 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow-md custom-rounded">Criar acesso por 30 dias</button>
             <p id="admin-message" class="hidden mt-3 text-sm text-center"></p>
@@ -401,6 +405,35 @@
             </div>
         </section>
 
+    </div>
+
+    <div id="customer-manage-modal" class="hidden fixed inset-0 bg-gray-900/80 backdrop-blur-sm flex justify-center items-center p-4 z-[60]">
+        <div class="bg-white dark:bg-gray-800 p-5 shadow-2xl max-w-sm w-full border border-gray-200 dark:border-gray-700 custom-rounded">
+            <div class="flex items-start justify-between gap-3 mb-4">
+                <div>
+                    <p class="text-[10px] uppercase tracking-wider font-bold text-indigo-500">Gerenciar acesso</p>
+                    <h3 id="manage-customer-email" class="text-base font-extrabold text-gray-900 dark:text-white break-all">Cliente</h3>
+                </div>
+                <button onclick="closeCustomerManager()" class="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl">×</button>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700/50 p-3 custom-rounded mb-4">
+                <span class="block text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Validade atual</span>
+                <span id="manage-customer-expiration" class="block text-sm font-bold text-gray-800 dark:text-gray-100 mt-1">--</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mb-3">
+                <input id="manage-duration-input" type="number" min="1" value="30" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded" placeholder="Quantidade">
+                <select id="manage-duration-unit" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
+                    <option value="days">Dias</option>
+                    <option value="hours">Horas</option>
+                </select>
+            </div>
+            <div class="space-y-2">
+                <button onclick="addCustomerTime()" class="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-sm custom-rounded">Adicionar tempo</button>
+                <button onclick="setCustomerTime()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm custom-rounded">Definir a partir de agora</button>
+                <button onclick="closeCustomerManager()" class="w-full py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-sm custom-rounded">Cancelar</button>
+            </div>
+            <p class="text-[10px] text-gray-400 text-center mt-3">Use “Adicionar tempo” para renovações e “Definir” para testes ou correções.</p>
+        </div>
     </div>
 
     <!-- Modais -->
@@ -570,7 +603,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { initializeAuth, browserLocalPersistence, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, addDoc, deleteDoc, writeBatch, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, addDoc, deleteDoc, writeBatch, getDocs, Timestamp, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const ADMIN_EMAIL = 'kendrioclaudio199@gmail.com';
         const INLINE_FIREBASE_CONFIG = {
@@ -611,6 +644,8 @@
         let editingRecordId = null;
         let parsedImportData = [];
         let expiryTimer = null;
+        let serverClockOffset = 0;
+        let selectedCustomerId = null;
 
         const LOCAL_STORAGE_KEY = 'overtime_auth_token_v7_inline';
         const RADIUS_STORAGE_KEY = 'overtime_radius_pref';
@@ -672,9 +707,15 @@
         const customerEmailInput = document.getElementById('customer-email-input');
         const customerPasswordInput = document.getElementById('customer-password-input');
         const customerDaysInput = document.getElementById('customer-days-input');
+        const customerDurationUnit = document.getElementById('customer-duration-unit');
         const createCustomerBtn = document.getElementById('create-customer-btn');
         const adminMessage = document.getElementById('admin-message');
         const customerList = document.getElementById('customer-list');
+        const customerManageModal = document.getElementById('customer-manage-modal');
+        const manageCustomerEmail = document.getElementById('manage-customer-email');
+        const manageCustomerExpiration = document.getElementById('manage-customer-expiration');
+        const manageDurationInput = document.getElementById('manage-duration-input');
+        const manageDurationUnit = document.getElementById('manage-duration-unit');
         const manualPaymentCard = document.getElementById('manual-payment-card');
         const pixCopyMessage = document.getElementById('pix-copy-message');
         const calcModal = document.getElementById('calc-modal');
@@ -867,6 +908,7 @@
         function showLoginScreen(message = '') {
             if (expiryTimer) clearInterval(expiryTimer);
             expiryTimer = null;
+            serverClockOffset = 0;
             expiryCountdown.classList.add('hidden');
             loginScreen.classList.remove('hidden');
             loginLoading.classList.add('hidden');
@@ -950,16 +992,24 @@
             return Number.isNaN(date.getTime()) ? null : date;
         }
 
+        async function syncServerClock(uid) {
+            const clockRef = doc(db, `artifacts/${appId}/users/${uid}/meta`, 'server_clock');
+            await setDoc(clockRef, { serverNow: serverTimestamp() }, { merge: true });
+            const clockSnap = await getDoc(clockRef);
+            const serverNow = clockSnap.exists() ? toDate(clockSnap.data().serverNow) : null;
+            if (!serverNow) throw new Error('SERVER_CLOCK_UNAVAILABLE');
+            serverClockOffset = serverNow.getTime() - Date.now();
+        }
+
         function startExpiryCountdown(expiration) {
             if (expiryTimer) clearInterval(expiryTimer);
             const updateCountdown = async () => {
-                const remaining = expiration.getTime() - Date.now();
+                const remaining = expiration.getTime() - (Date.now() + serverClockOffset);
                 if (remaining <= 0) {
                     clearInterval(expiryTimer);
                     expiryTimer = null;
-                    expiryCountdown.classList.add('hidden');
-                    if (auth && auth.currentUser) await signOut(auth);
-                    showLoginScreen('Seu acesso expirou. Fale com o administrador para renovar.');
+                    expiryCountdown.textContent = 'Validade sendo verificada pelo servidor...';
+                    expiryCountdown.classList.remove('hidden');
                     return;
                 }
                 if (remaining <= 24 * 60 * 60 * 1000) {
@@ -985,7 +1035,9 @@
                 const profileSnap = await getDoc(doc(db, 'users', user.uid));
                 profile = profileSnap.exists() ? profileSnap.data() : null;
                 const expiration = profile ? toDate(profile.expiresAt) : null;
-                if (!profile || profile.active === false || !expiration || expiration <= new Date()) {
+                // A validade não é decidida pelo relógio do aparelho.
+                // O Firestore valida o vencimento usando request.time no servidor.
+                if (!profile || profile.active === false || !expiration) {
                     await signOut(auth);
                     showLoginScreen('Acesso vencido ou ainda não liberado. Fale com o administrador.');
                     return;
@@ -1006,6 +1058,7 @@
                 expiryCountdown.classList.add('hidden');
                 loadCustomers();
             } else {
+                await syncServerClock(user.uid);
                 startExpiryCountdown(toDate(profile.expiresAt));
             }
             hideLoginScreen();
@@ -1057,6 +1110,15 @@
             }
         };
 
+        function updateDurationButtonLabel() {
+            const value = Math.max(1, parseInt(customerDaysInput.value, 10) || 30);
+            const label = customerDurationUnit.value === 'hours' ? `${value}h` : `${value} dias`;
+            createCustomerBtn.textContent = `Criar acesso por ${label}`;
+        }
+
+        customerDaysInput.addEventListener('input', updateDurationButtonLabel);
+        customerDurationUnit.addEventListener('change', updateDurationButtonLabel);
+
         function escapeHtml(value) {
             return String(value || '').replace(/[&<>'"]/g, char => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -1078,11 +1140,12 @@
                     const expired = !expiration || expiration <= new Date() || customer.active === false;
                     return `<div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 custom-rounded">
                         <div class="min-w-0">
-                            <p class="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">${escapeHtml(customer.email)}</p>
-                            <p class="text-[10px] ${expired ? 'text-red-500' : 'text-green-600'}">${customer.active === false ? 'Bloqueado' : (expired ? 'Vencido' : `Válido até ${expiration.toLocaleDateString('pt-BR')}`)}</p>
+                            <button onclick="openCustomerManager('${customer.id}')" class="text-left text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:underline truncate max-w-full">${escapeHtml(customer.email)}</button>
+                            <p class="text-[10px] ${expired ? 'text-red-500' : 'text-green-600'}">${customer.active === false ? 'Bloqueado' : (expired ? 'Vencido' : `Válido até ${expiration.toLocaleString('pt-BR')}`)}</p>
                         </div>
                         <div class="flex gap-1">
                             <button onclick="renewCustomer('${customer.id}', 30)" class="px-2 py-1 text-[10px] font-bold bg-green-600 text-white rounded">+30 dias</button>
+                            <button onclick="setCustomerDuration('${customer.id}', 1, 'hours')" class="px-2 py-1 text-[10px] font-bold bg-purple-600 text-white rounded">Definir 1h</button>
                             <button onclick="setCustomerStatus('${customer.id}', ${customer.active === false})" class="px-2 py-1 text-[10px] font-bold ${customer.active === false ? 'bg-indigo-600' : 'bg-red-500'} text-white rounded">${customer.active === false ? 'Ativar' : 'Bloquear'}</button>
                         </div>
                     </div>`;
@@ -1092,6 +1155,85 @@
                 customerList.innerHTML = '<p class="text-xs text-red-500">Não foi possível carregar os clientes.</p>';
             }
         }
+
+        window.openCustomerManager = async function(uid) {
+            try {
+                const snapshot = await getDoc(doc(db, 'users', uid));
+                if (!snapshot.exists()) return;
+                const customer = snapshot.data();
+                selectedCustomerId = uid;
+                manageCustomerEmail.textContent = customer.email || 'Cliente';
+                const expiration = toDate(customer.expiresAt);
+                manageCustomerExpiration.textContent = expiration ? expiration.toLocaleString('pt-BR') : 'Sem validade definida';
+                manageDurationInput.value = 30;
+                manageDurationUnit.value = 'days';
+                customerManageModal.classList.remove('hidden');
+            } catch (error) {
+                console.error('Falha ao abrir cliente:', error);
+                displayError('Não foi possível carregar esse cliente.');
+            }
+        };
+
+        window.closeCustomerManager = function() {
+            selectedCustomerId = null;
+            customerManageModal.classList.add('hidden');
+        };
+
+        async function changeCustomerTime(mode) {
+            if (!selectedCustomerId) return;
+            const amount = Math.max(1, parseInt(manageDurationInput.value, 10) || 1);
+            const unit = manageDurationUnit.value;
+            const currentSnap = await getDoc(doc(db, 'users', selectedCustomerId));
+            if (!currentSnap.exists()) return;
+            const customer = currentSnap.data();
+            await syncServerClock(auth.currentUser.uid);
+            const serverNow = new Date(Date.now() + serverClockOffset);
+            const currentExpiration = toDate(customer.expiresAt);
+            const base = mode === 'add' && currentExpiration && currentExpiration > serverNow ? currentExpiration : serverNow;
+            const amountMs = unit === 'hours' ? amount * 60 * 60 * 1000 : amount * 86400000;
+            const expiration = new Date(base.getTime() + amountMs);
+            await setDoc(doc(db, 'users', selectedCustomerId), {
+                active: true,
+                expiresAt: Timestamp.fromDate(expiration)
+            }, { merge: true });
+            showNotification(`Validade atualizada até ${expiration.toLocaleString('pt-BR')}.`, 'success');
+            closeCustomerManager();
+            loadCustomers();
+        }
+
+        window.addCustomerTime = async function() {
+            try {
+                await changeCustomerTime('add');
+            } catch (error) {
+                console.error('Falha ao adicionar tempo:', error);
+                displayError('Não foi possível adicionar tempo.');
+            }
+        };
+
+        window.setCustomerTime = async function() {
+            try {
+                await changeCustomerTime('set');
+            } catch (error) {
+                console.error('Falha ao definir tempo:', error);
+                displayError('Não foi possível definir o prazo.');
+            }
+        };
+
+        window.setCustomerDuration = async function(uid, amount, unit = 'hours') {
+            try {
+                const durationMs = unit === 'hours' ? amount * 60 * 60 * 1000 : amount * 86400000;
+                const expiration = new Date(Date.now() + durationMs);
+                await setDoc(doc(db, 'users', uid), {
+                    active: true,
+                    expiresAt: Timestamp.fromDate(expiration)
+                }, { merge: true });
+                showNotification(`Prazo definido até ${expiration.toLocaleString('pt-BR')}.`, 'success');
+                loadCustomers();
+            } catch (error) {
+                console.error('Falha ao definir prazo:', error);
+                displayError('Não foi possível alterar o prazo.');
+            }
+        };
 
         window.renewCustomer = async function(uid, days = 30) {
             try {
@@ -1128,7 +1270,9 @@
             }
             const email = customerEmailInput.value.trim().toLowerCase();
             const password = customerPasswordInput.value;
-            const days = Math.max(1, parseInt(customerDaysInput.value, 10) || 30);
+            const duration = Math.max(1, parseInt(customerDaysInput.value, 10) || 30);
+            const unit = customerDurationUnit.value;
+            const durationLabel = unit === 'hours' ? `${duration}h` : `${duration} dias`;
             if (!email || !password || password.length < 6) {
                 adminMessage.textContent = 'Informe e-mail e uma senha com pelo menos 6 caracteres.';
                 adminMessage.className = 'mt-3 text-sm text-center text-red-600 dark:text-red-400';
@@ -1146,7 +1290,8 @@
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error?.message || 'Não foi possível criar o usuário.');
 
-                const expiration = new Date(Date.now() + days * 86400000);
+                const durationMs = unit === 'hours' ? duration * 60 * 60 * 1000 : duration * 86400000;
+                const expiration = new Date(Date.now() + durationMs);
                 await setDoc(doc(db, 'users', result.localId), {
                     email,
                     role: 'customer',
@@ -1154,7 +1299,7 @@
                     expiresAt: Timestamp.fromDate(expiration),
                     createdAt: new Date().toISOString()
                 });
-                adminMessage.textContent = `Acesso criado até ${expiration.toLocaleDateString('pt-BR')}.`;
+                adminMessage.textContent = `Acesso criado até ${expiration.toLocaleString('pt-BR')}.`;
                 adminMessage.className = 'mt-3 text-sm text-center text-green-600 dark:text-green-400';
                 customerEmailInput.value = '';
                 customerPasswordInput.value = '';
@@ -1165,7 +1310,7 @@
                 adminMessage.className = 'mt-3 text-sm text-center text-red-600 dark:text-red-400';
             } finally {
                 createCustomerBtn.disabled = false;
-                createCustomerBtn.textContent = `Criar acesso por ${days} dias`;
+                createCustomerBtn.textContent = `Criar acesso por ${durationLabel}`;
             }
         };
 
@@ -1675,6 +1820,11 @@
             }
         }
 
+        async function handleServerAccessDenied() {
+            if (auth && auth.currentUser) await signOut(auth);
+            showLoginScreen('Acesso expirado ou bloqueado. Fale com o administrador para renovar.');
+        }
+
         function listenForSettings(uid) {
             onSnapshot(doc(db, `artifacts/${appId}/users/${uid}/settings`, 'user_settings'), (snap) => {
                 if (snap.exists()) {
@@ -1694,6 +1844,8 @@
                     }
                 }
                 updateRecordButtonState();
+            }, (error) => {
+                if (error.code === 'permission-denied') handleServerAccessDenied();
             });
         }
 
@@ -1703,6 +1855,8 @@
                 overtimeRecords = [];
                 snap.forEach(d => overtimeRecords.push({ id: d.id, ...d.data() }));
                 renderMonthlySummaries();
+            }, (error) => {
+                if (error.code === 'permission-denied') handleServerAccessDenied();
             });
         }
 
