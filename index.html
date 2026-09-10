@@ -1019,7 +1019,7 @@
             }
         }
 
-        async function claimCustomerDevice(uid) {
+        async function claimCustomerDevice(uid, email) {
             const deviceId = getDeviceId(uid);
             const userRef = doc(db, 'users', uid);
             try {
@@ -1040,7 +1040,7 @@
             } catch (error) {
                 if (error.message === 'DEVICE_ALREADY_REGISTERED') {
                     await signOut(auth);
-                    showLoginScreen('Este login já está vinculado a outro celular. Fale com o administrador para liberar este aparelho.');
+                    showLoginScreen(`Detectamos outro aparelho tentando acessar a conta ${email || 'deste usuário'}. O acesso foi bloqueado. Fale com o administrador para liberar este aparelho.`);
                     return false;
                 }
                 throw error;
@@ -1104,7 +1104,7 @@
                 expiryCountdown.classList.add('hidden');
                 loadCustomers();
             } else {
-                const deviceAccepted = await claimCustomerDevice(user.uid);
+                const deviceAccepted = await claimCustomerDevice(user.uid, user.email);
                 if (!deviceAccepted) return;
                 await syncServerClock(user.uid);
                 startExpiryCountdown(toDate(profile.expiresAt));
@@ -1185,11 +1185,16 @@
                 }
                 customerList.innerHTML = customers.map(customer => {
                     const expiration = toDate(customer.expiresAt);
+                    const deviceRegistered = toDate(customer.deviceRegisteredAt);
                     const expired = !expiration || expiration <= new Date() || customer.active === false;
+                    const deviceLabel = customer.deviceId
+                        ? `Aparelho vinculado${deviceRegistered ? ` em ${deviceRegistered.toLocaleDateString('pt-BR')}` : ''}`
+                        : 'Nenhum aparelho vinculado';
                     return `<div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 custom-rounded">
                         <div class="min-w-0">
                             <button onclick="openCustomerManager('${customer.id}')" class="text-left text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:underline truncate max-w-full">${escapeHtml(customer.email)}</button>
                             <p class="text-[10px] ${expired ? 'text-red-500' : 'text-green-600'}">${customer.active === false ? 'Bloqueado' : (expired ? 'Vencido' : `Válido até ${expiration.toLocaleString('pt-BR')}`)}</p>
+                            <p class="text-[10px] ${customer.deviceId ? 'text-indigo-600 dark:text-indigo-300' : 'text-gray-400'}">${deviceLabel}</p>
                         </div>
                         <div class="flex gap-1">
                             <button onclick="renewCustomer('${customer.id}', 30)" class="px-2 py-1 text-[10px] font-bold bg-green-600 text-white rounded">+30 dias</button>
