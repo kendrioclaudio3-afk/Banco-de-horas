@@ -128,7 +128,7 @@
                     <label for="login-password" class="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">Senha</label>
                     <div class="relative">
                         <input id="login-password" type="password" autocomplete="current-password" required class="w-full p-3 pr-12 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-white custom-rounded" placeholder="Sua senha">
-                        <button type="button" onclick="togglePasswordVisibility('login-password', this)" class="absolute inset-y-0 right-0 px-3 text-gray-400 hover:text-indigo-600" aria-label="Mostrar senha">👁</button>
+                        <button type="button" onclick="togglePasswordVisibility('login-password', this)" class="absolute inset-y-0 right-0 px-3 text-gray-400 hover:text-indigo-600" aria-label="Mostrar senha"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path><circle cx="12" cy="12" r="3" stroke-width="1.8"></circle></svg></button>
                     </div>
                 </div>
                 <button id="login-submit" type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md custom-rounded">Entrar</button>
@@ -387,7 +387,7 @@
                 <input id="customer-email-input" type="email" placeholder="E-mail do cliente" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
                 <div class="relative">
                     <input id="customer-password-input" type="password" placeholder="Senha inicial" class="w-full p-2.5 pr-10 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
-                    <button type="button" onclick="togglePasswordVisibility('customer-password-input', this)" class="absolute inset-y-0 right-0 px-2 text-gray-400 hover:text-indigo-600" aria-label="Mostrar senha">👁</button>
+                    <button type="button" onclick="togglePasswordVisibility('customer-password-input', this)" class="absolute inset-y-0 right-0 px-2 text-gray-400 hover:text-indigo-600" aria-label="Mostrar senha"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path><circle cx="12" cy="12" r="3" stroke-width="1.8"></circle></svg></button>
                 </div>
                 <input id="customer-days-input" type="number" min="1" value="30" placeholder="Quantidade" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
                 <select id="customer-duration-unit" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
@@ -953,7 +953,9 @@
             if (!input) return;
             const showing = input.type === 'text';
             input.type = showing ? 'password' : 'text';
-            button.textContent = showing ? '👁' : '🙈';
+            button.innerHTML = showing
+                ? '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path><circle cx="12" cy="12" r="3" stroke-width="1.8"></circle></svg>'
+                : '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 3l18 18M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58M9.88 5.09A10.94 10.94 0 0112 5c4.477 0 8.268 2.943 9.542 7a10.97 10.97 0 01-4.132 5.411M6.61 6.61A10.97 10.97 0 002.458 12c.71 2.263 2.12 4.15 4.01 5.41"></path></svg>';
             button.setAttribute('aria-label', showing ? 'Mostrar senha' : 'Ocultar senha');
         };
 
@@ -1147,6 +1149,7 @@
                             <button onclick="renewCustomer('${customer.id}', 30)" class="px-2 py-1 text-[10px] font-bold bg-green-600 text-white rounded">+30 dias</button>
                             <button onclick="setCustomerDuration('${customer.id}', 1, 'hours')" class="px-2 py-1 text-[10px] font-bold bg-purple-600 text-white rounded">Definir 1h</button>
                             <button onclick="setCustomerStatus('${customer.id}', ${customer.active === false})" class="px-2 py-1 text-[10px] font-bold ${customer.active === false ? 'bg-indigo-600' : 'bg-red-500'} text-white rounded">${customer.active === false ? 'Ativar' : 'Bloquear'}</button>
+                            <button onclick="deleteCustomerPermanently('${customer.id}')" class="px-2 py-1 text-[10px] font-bold bg-gray-700 text-white rounded">Excluir</button>
                         </div>
                     </div>`;
                 }).join('');
@@ -1261,6 +1264,27 @@
             } catch (error) {
                 console.error('Falha ao alterar cliente:', error);
                 displayError('Não foi possível alterar o status.');
+            }
+        };
+
+        window.deleteCustomerPermanently = async function(uid) {
+            if (!confirm('Excluir definitivamente este cliente e todos os registros dele? Esta ação não pode ser desfeita.')) return;
+            try {
+                const recordsRef = collection(db, `artifacts/${appId}/users/${uid}/overtime_records`);
+                const recordsSnap = await getDocs(recordsRef);
+                const items = recordsSnap.docs;
+                for (let start = 0; start < items.length; start += 400) {
+                    const batch = writeBatch(db);
+                    items.slice(start, start + 400).forEach(item => batch.delete(item.ref));
+                    await batch.commit();
+                }
+                await deleteDoc(doc(db, `artifacts/${appId}/users/${uid}/settings`, 'user_settings'));
+                await deleteDoc(doc(db, 'users', uid));
+                showNotification('Cliente e registros excluídos definitivamente.', 'success');
+                loadCustomers();
+            } catch (error) {
+                console.error('Falha ao excluir cliente:', error);
+                displayError('Não foi possível excluir. Publique a regra administrativa atualizada.');
             }
         };
 
