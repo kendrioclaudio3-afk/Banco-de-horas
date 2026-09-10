@@ -430,6 +430,7 @@
             <div class="space-y-2">
                 <button onclick="addCustomerTime()" class="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-sm custom-rounded">Adicionar tempo</button>
                 <button onclick="setCustomerTime()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm custom-rounded">Definir a partir de agora</button>
+                <button onclick="releaseCustomerDevice()" class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm custom-rounded">Liberar outro aparelho</button>
                 <button onclick="closeCustomerManager()" class="w-full py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-sm custom-rounded">Cancelar</button>
             </div>
             <p class="text-[10px] text-gray-400 text-center mt-3">Use “Adicionar tempo” para renovações e “Definir” para testes ou correções.</p>
@@ -603,7 +604,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { initializeAuth, browserLocalPersistence, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, addDoc, deleteDoc, writeBatch, getDocs, Timestamp, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, addDoc, deleteDoc, writeBatch, getDocs, runTransaction, Timestamp, serverTimestamp, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const ADMIN_EMAIL = 'kendrioclaudio199@gmail.com';
         const INLINE_FIREBASE_CONFIG = {
@@ -651,6 +652,7 @@
         const RADIUS_STORAGE_KEY = 'overtime_radius_pref';
         const LOCAL_RECORDS_KEY = `overtime_records_local_v8_${appId}`;
         const LOCAL_SETTINGS_KEY = `overtime_settings_local_v8_${appId}`;
+        const DEVICE_KEY_PREFIX = `bank_hours_device_${appId}_`;
 
         // DOM
         const authStatusEl = document.getElementById('auth-status');
@@ -1003,6 +1005,48 @@
             serverClockOffset = serverNow.getTime() - Date.now();
         }
 
+        function getDeviceId(uid) {
+            const key = `${DEVICE_KEY_PREFIX}${uid}`;
+            try {
+                let deviceId = localStorage.getItem(key);
+                if (!deviceId) {
+                    deviceId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`);
+                    localStorage.setItem(key, deviceId);
+                }
+                return deviceId;
+            } catch (error) {
+                return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+            }
+        }
+
+        async function claimCustomerDevice(uid) {
+            const deviceId = getDeviceId(uid);
+            const userRef = doc(db, 'users', uid);
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const snapshot = await transaction.get(userRef);
+                    if (!snapshot.exists()) throw new Error('PROFILE_NOT_FOUND');
+                    const profile = snapshot.data();
+                    if (!profile.deviceId) {
+                        transaction.update(userRef, {
+                            deviceId,
+                            deviceRegisteredAt: serverTimestamp()
+                        });
+                    } else if (profile.deviceId !== deviceId) {
+                        throw new Error('DEVICE_ALREADY_REGISTERED');
+                    }
+                });
+                return true;
+            } catch (error) {
+                if (error.message === 'DEVICE_ALREADY_REGISTERED') {
+                    await signOut(auth);
+                    showLoginScreen('Este login já está vinculado a outro celular. Fale com o administrador para liberar este aparelho.');
+                    return false;
+                }
+                throw error;
+            }
+        }
+
         function startExpiryCountdown(expiration) {
             if (expiryTimer) clearInterval(expiryTimer);
             const updateCountdown = async () => {
@@ -1060,6 +1104,8 @@
                 expiryCountdown.classList.add('hidden');
                 loadCustomers();
             } else {
+                const deviceAccepted = await claimCustomerDevice(user.uid);
+                if (!deviceAccepted) return;
                 await syncServerClock(user.uid);
                 startExpiryCountdown(toDate(profile.expiresAt));
             }
@@ -1180,6 +1226,23 @@
         window.closeCustomerManager = function() {
             selectedCustomerId = null;
             customerManageModal.classList.add('hidden');
+        };
+
+        window.releaseCustomerDevice = async function() {
+            if (!selectedCustomerId) return;
+            if (!confirm('Liberar este cliente para entrar em outro aparelho?')) return;
+            try {
+                await setDoc(doc(db, 'users', selectedCustomerId), {
+                    deviceId: deleteField(),
+                    deviceRegisteredAt: deleteField()
+                }, { merge: true });
+                showNotification('Aparelho liberado. O próximo celular poderá entrar.', 'success');
+                closeCustomerManager();
+                loadCustomers();
+            } catch (error) {
+                console.error('Falha ao liberar aparelho:', error);
+                displayError('Não foi possível liberar o aparelho.');
+            }
         };
 
         async function changeCustomerTime(mode) {
