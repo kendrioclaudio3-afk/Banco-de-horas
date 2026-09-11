@@ -375,13 +375,23 @@
             </div>
         </div>
 
-        <section id="admin-panel" class="hidden mt-8 bg-white dark:bg-gray-800 shadow-lg p-5 border border-amber-200 dark:border-amber-800 custom-rounded">
-            <div class="flex items-center justify-between mb-4">
-                <div>
-                    <h2 class="text-lg font-bold text-amber-700 dark:text-amber-300">Administração</h2>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Crie e libere acessos após o pagamento.</p>
+        <section id="admin-panel" class="hidden mt-8 bg-gradient-to-br from-white to-amber-50/70 dark:from-gray-800 dark:to-amber-950/20 shadow-xl p-5 border border-amber-200 dark:border-amber-800 custom-rounded">
+            <div class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06-1.8 1.8-.06-.06a1.7 1.7 0 00-1.88-.34 1.7 1.7 0 00-1.03 1.56V20h-2.55v-.1a1.7 1.7 0 00-1.03-1.56 1.7 1.7 0 00-1.88.34l-.06.06-1.8-1.8.06-.06A1.7 1.7 0 008.1 15a1.7 1.7 0 00-1.56-1.03H6v-2.55h.1A1.7 1.7 0 007.66 10a1.7 1.7 0 00-.34-1.88l-.06-.06 1.8-1.8.06.06A1.7 1.7 0 0011 6a1.7 1.7 0 001.03-1.56V4h2.55v.1A1.7 1.7 0 0015.6 6a1.7 1.7 0 001.88-.34l.06-.06 1.8 1.8-.06.06A1.7 1.7 0 0018.94 9c.2.58.75.97 1.36.97h.1v2.55h-.1A1.7 1.7 0 0019.4 15z"></path></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-amber-700 dark:text-amber-300">Administração</h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Controle de clientes, validade e segurança.</p>
+                    </div>
                 </div>
-                <span class="text-[10px] font-bold px-2 py-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">ADMIN</span>
+                <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">ADMIN</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mb-5">
+                <div class="bg-white/80 dark:bg-gray-800/70 border border-gray-100 dark:border-gray-700 p-3 rounded-2xl shadow-sm"><span class="block text-[10px] uppercase font-bold text-gray-400">Clientes</span><strong id="admin-stat-total" class="block text-xl text-gray-800 dark:text-white mt-1">0</strong></div>
+                <div class="bg-white/80 dark:bg-gray-800/70 border border-gray-100 dark:border-gray-700 p-3 rounded-2xl shadow-sm"><span class="block text-[10px] uppercase font-bold text-gray-400">Ativos</span><strong id="admin-stat-active" class="block text-xl text-green-600 mt-1">0</strong></div>
+                <div class="bg-white/80 dark:bg-gray-800/70 border border-gray-100 dark:border-gray-700 p-3 rounded-2xl shadow-sm"><span class="block text-[10px] uppercase font-bold text-gray-400">Alertas</span><strong id="admin-stat-alerts" class="block text-xl text-amber-600 mt-1">0</strong></div>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <input id="customer-email-input" type="email" placeholder="E-mail do cliente" class="p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm custom-rounded">
@@ -398,7 +408,13 @@
             <button id="create-customer-btn" onclick="createCustomerAccount()" class="w-full mt-3 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow-md custom-rounded">Criar acesso por 30 dias</button>
             <p id="admin-message" class="hidden mt-3 text-sm text-center"></p>
             <div class="mt-5 pt-4 border-t border-amber-100 dark:border-amber-900/40">
-                <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">Clientes cadastrados</h3>
+                <div class="flex items-center justify-between gap-3 mb-2">
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200">Clientes cadastrados</h3>
+                        <p class="text-[10px] text-gray-400">Toque em Informações para ver a segurança do acesso.</p>
+                    </div>
+                    <input id="customer-search-input" oninput="filterCustomers()" type="search" placeholder="Pesquisar" class="w-32 sm:w-44 p-2 text-xs bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 custom-rounded">
+                </div>
                 <div id="customer-list" class="space-y-2">
                     <p class="text-xs text-gray-400">Carregando...</p>
                 </div>
@@ -434,6 +450,22 @@
                 <button onclick="closeCustomerManager()" class="w-full py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-sm custom-rounded">Cancelar</button>
             </div>
             <p class="text-[10px] text-gray-400 text-center mt-3">Use “Adicionar tempo” para renovações e “Definir” para testes ou correções.</p>
+        </div>
+    </div>
+
+    <div id="customer-info-modal" class="hidden fixed inset-0 bg-gray-900/80 backdrop-blur-sm flex justify-center items-center p-4 z-[70]">
+        <div class="bg-white dark:bg-gray-800 p-5 shadow-2xl max-w-sm w-full border border-gray-200 dark:border-gray-700 custom-rounded">
+            <div class="flex items-start justify-between gap-3 mb-4">
+                <div>
+                    <p class="text-[10px] uppercase tracking-wider font-bold text-indigo-500">Segurança do acesso</p>
+                    <h3 id="customer-info-email" class="text-base font-extrabold text-gray-900 dark:text-white break-all">Cliente</h3>
+                </div>
+                <button onclick="closeCustomerInfo()" class="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl">×</button>
+            </div>
+            <div id="customer-info-content" class="space-y-3 text-xs text-gray-700 dark:text-gray-200">
+                Carregando informações...
+            </div>
+            <button onclick="closeCustomerInfo()" class="w-full mt-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-sm custom-rounded">Fechar</button>
         </div>
     </div>
 
@@ -604,7 +636,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { initializeAuth, browserLocalPersistence, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, addDoc, deleteDoc, writeBatch, getDocs, runTransaction, Timestamp, serverTimestamp, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, addDoc, deleteDoc, writeBatch, getDocs, runTransaction, Timestamp, serverTimestamp, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const ADMIN_EMAIL = 'kendrioclaudio199@gmail.com';
         const INLINE_FIREBASE_CONFIG = {
@@ -713,7 +745,14 @@
         const createCustomerBtn = document.getElementById('create-customer-btn');
         const adminMessage = document.getElementById('admin-message');
         const customerList = document.getElementById('customer-list');
+        const adminStatTotal = document.getElementById('admin-stat-total');
+        const adminStatActive = document.getElementById('admin-stat-active');
+        const adminStatAlerts = document.getElementById('admin-stat-alerts');
+        const customerSearchInput = document.getElementById('customer-search-input');
         const customerManageModal = document.getElementById('customer-manage-modal');
+        const customerInfoModal = document.getElementById('customer-info-modal');
+        const customerInfoEmail = document.getElementById('customer-info-email');
+        const customerInfoContent = document.getElementById('customer-info-content');
         const manageCustomerEmail = document.getElementById('manage-customer-email');
         const manageCustomerExpiration = document.getElementById('manage-customer-expiration');
         const manageDurationInput = document.getElementById('manage-duration-input');
@@ -1022,6 +1061,7 @@
         async function claimCustomerDevice(uid, email) {
             const deviceId = getDeviceId(uid);
             const userRef = doc(db, 'users', uid);
+            let deviceBlocked = false;
             try {
                 await runTransaction(db, async (transaction) => {
                     const snapshot = await transaction.get(userRef);
@@ -1033,12 +1073,26 @@
                             deviceRegisteredAt: serverTimestamp()
                         });
                     } else if (profile.deviceId !== deviceId) {
+                        deviceBlocked = true;
                         throw new Error('DEVICE_ALREADY_REGISTERED');
                     }
                 });
                 return true;
             } catch (error) {
-                if (error.message === 'DEVICE_ALREADY_REGISTERED') {
+                if (deviceBlocked || error.message === 'DEVICE_ALREADY_REGISTERED') {
+                    try {
+                        await setDoc(userRef, {
+                            lastDeviceAttemptAt: serverTimestamp(),
+                            lastDeviceAttemptDevice: deviceId,
+                            deviceAttemptHistory: arrayUnion({
+                                attemptedAt: new Date().toISOString(),
+                                deviceId,
+                                browser: navigator.userAgent.slice(0, 160)
+                            })
+                        }, { merge: true });
+                    } catch (logError) {
+                        console.warn('Não foi possível registrar a tentativa de aparelho:', logError);
+                    }
                     await signOut(auth);
                     showLoginScreen(`Detectamos outro aparelho tentando acessar a conta ${email || 'deste usuário'}. O acesso foi bloqueado. Fale com o administrador para liberar este aparelho.`);
                     return false;
@@ -1173,12 +1227,25 @@
             }[char]));
         }
 
+        window.filterCustomers = function() {
+            const term = (customerSearchInput.value || '').toLowerCase().trim();
+            Array.from(customerList.children).forEach(card => {
+                card.style.display = !term || card.textContent.toLowerCase().includes(term) ? '' : 'none';
+            });
+        };
+
         async function loadCustomers() {
             if (!auth.currentUser || (auth.currentUser.email || '').toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return;
             try {
                 const snapshot = await getDocs(collection(db, 'users'));
                 const customers = [];
                 snapshot.forEach(item => customers.push({ id: item.id, ...item.data() }));
+                const now = new Date();
+                const activeCount = customers.filter(customer => customer.active !== false && toDate(customer.expiresAt) && toDate(customer.expiresAt) > now).length;
+                const alertCount = customers.filter(customer => customer.lastDeviceAttemptAt || (Array.isArray(customer.deviceAttemptHistory) && customer.deviceAttemptHistory.length)).length;
+                adminStatTotal.textContent = customers.length;
+                adminStatActive.textContent = activeCount;
+                adminStatAlerts.textContent = alertCount;
                 if (customers.length === 0) {
                     customerList.innerHTML = '<p class="text-xs text-gray-400">Nenhum cliente criado ainda.</p>';
                     return;
@@ -1186,29 +1253,79 @@
                 customerList.innerHTML = customers.map(customer => {
                     const expiration = toDate(customer.expiresAt);
                     const deviceRegistered = toDate(customer.deviceRegisteredAt);
+                    const lastDeviceAttempt = toDate(customer.lastDeviceAttemptAt);
                     const expired = !expiration || expiration <= new Date() || customer.active === false;
                     const deviceLabel = customer.deviceId
                         ? `Aparelho vinculado${deviceRegistered ? ` em ${deviceRegistered.toLocaleDateString('pt-BR')}` : ''}`
                         : 'Nenhum aparelho vinculado';
+                    const attemptLabel = lastDeviceAttempt
+                        ? `Outro aparelho tentou acessar em ${lastDeviceAttempt.toLocaleString('pt-BR')}`
+                        : '';
                     return `<div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 custom-rounded">
                         <div class="min-w-0">
                             <button onclick="openCustomerManager('${customer.id}')" class="text-left text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:underline truncate max-w-full">${escapeHtml(customer.email)}</button>
                             <p class="text-[10px] ${expired ? 'text-red-500' : 'text-green-600'}">${customer.active === false ? 'Bloqueado' : (expired ? 'Vencido' : `Válido até ${expiration.toLocaleString('pt-BR')}`)}</p>
                             <p class="text-[10px] ${customer.deviceId ? 'text-indigo-600 dark:text-indigo-300' : 'text-gray-400'}">${deviceLabel}</p>
+
                         </div>
                         <div class="flex gap-1">
                             <button onclick="renewCustomer('${customer.id}', 30)" class="px-2 py-1 text-[10px] font-bold bg-green-600 text-white rounded">+30 dias</button>
                             <button onclick="setCustomerDuration('${customer.id}', 1, 'hours')" class="px-2 py-1 text-[10px] font-bold bg-purple-600 text-white rounded">Definir 1h</button>
                             <button onclick="setCustomerStatus('${customer.id}', ${customer.active === false})" class="px-2 py-1 text-[10px] font-bold ${customer.active === false ? 'bg-indigo-600' : 'bg-red-500'} text-white rounded">${customer.active === false ? 'Ativar' : 'Bloquear'}</button>
+                            <button onclick="openCustomerInfo('${customer.id}')" class="px-2 py-1 text-[10px] font-bold bg-slate-600 text-white rounded">Informações</button>
                             <button onclick="deleteCustomerPermanently('${customer.id}')" class="px-2 py-1 text-[10px] font-bold bg-gray-700 text-white rounded">Excluir</button>
                         </div>
                     </div>`;
                 }).join('');
+                filterCustomers();
             } catch (error) {
                 console.error('Falha ao carregar clientes:', error);
                 customerList.innerHTML = '<p class="text-xs text-red-500">Não foi possível carregar os clientes.</p>';
             }
         }
+
+        window.openCustomerInfo = async function(uid) {
+            try {
+                customerInfoModal.classList.remove('hidden');
+                customerInfoContent.textContent = 'Carregando informações...';
+                const snapshot = await getDoc(doc(db, 'users', uid));
+                if (!snapshot.exists()) {
+                    customerInfoContent.textContent = 'Cliente não encontrado.';
+                    return;
+                }
+                const customer = snapshot.data();
+                customerInfoEmail.textContent = customer.email || 'Cliente';
+                const registered = toDate(customer.deviceRegisteredAt);
+                let history = Array.isArray(customer.deviceAttemptHistory) ? customer.deviceAttemptHistory.slice().reverse() : [];
+                if (!history.length && customer.lastDeviceAttemptAt) {
+                    const previousAttempt = toDate(customer.lastDeviceAttemptAt);
+                    history = previousAttempt ? [{ attemptedAt: previousAttempt.toISOString() }] : [];
+                }
+                const historyHtml = history.length
+                    ? history.slice(0, 10).map(item => {
+                        const attempted = item.attemptedAt ? new Date(item.attemptedAt) : null;
+                        const dateText = attempted && !Number.isNaN(attempted.getTime()) ? attempted.toLocaleString('pt-BR') : 'Data não disponível';
+                        return `<div class="p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 custom-rounded"><p class="font-bold text-amber-700 dark:text-amber-300">Tentativa bloqueada</p><p class="text-[11px] mt-1">${dateText}</p>${item.browser ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 break-words">${escapeHtml(item.browser)}</p>` : ''}</div>`;
+                    }).join('')
+                    : '<p class="text-gray-400">Nenhuma tentativa bloqueada registrada.</p>';
+                customerInfoContent.innerHTML = `
+                    <div class="p-3 bg-gray-50 dark:bg-gray-700/50 custom-rounded">
+                        <p class="font-bold">Aparelho autorizado</p>
+                        <p class="mt-1">${customer.deviceId ? `Vinculado${registered ? ` em ${registered.toLocaleString('pt-BR')}` : ''}` : 'Nenhum aparelho vinculado'}</p>
+                    </div>
+                    <div>
+                        <p class="font-bold mb-2">Histórico de tentativas</p>
+                        <div class="space-y-2">${historyHtml}</div>
+                    </div>`;
+            } catch (error) {
+                console.error('Falha ao carregar informações do aparelho:', error);
+                customerInfoContent.textContent = 'Não foi possível carregar as informações.';
+            }
+        };
+
+        window.closeCustomerInfo = function() {
+            customerInfoModal.classList.add('hidden');
+        };
 
         window.openCustomerManager = async function(uid) {
             try {
@@ -1239,7 +1356,9 @@
             try {
                 await setDoc(doc(db, 'users', selectedCustomerId), {
                     deviceId: deleteField(),
-                    deviceRegisteredAt: deleteField()
+                    deviceRegisteredAt: deleteField(),
+                    lastDeviceAttemptAt: deleteField(),
+                    lastDeviceAttemptDevice: deleteField()
                 }, { merge: true });
                 showNotification('Aparelho liberado. O próximo celular poderá entrar.', 'success');
                 closeCustomerManager();
