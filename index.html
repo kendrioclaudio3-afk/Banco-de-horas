@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Banco de Horas | Versão de teste 1.4.2: alertas clicáveis e painel em tempo real -->
     <title>Controle de Horas Extras e Faltas</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -22,9 +23,15 @@
             transition: background-color 0.3s, color 0.3s;
         }
         
-        * {
-            transition-property: background-color, border-color, color, fill, stroke, border-radius;
-            transition-duration: 200ms;
+        /* Transições limitadas aos elementos principais para evitar engasgos no tema.
+           Uma transição global em todos os elementos deixa a troca dark/light pesada. */
+        body, #app, #login-screen, #app-menu, #manual-payment-card, #admin-panel,
+        button, input, select, textarea {
+            transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+        }
+
+        .theme-changing, .theme-changing *, .theme-changing *::before, .theme-changing *::after {
+            transition: none !important;
         }
 
         .custom-rounded {
@@ -105,6 +112,93 @@
         
         .dark input[type=range]::-webkit-slider-runnable-track {
             background: #4b5563;
+        }
+
+        /* Microinterações da versão 1.1 */
+        button, input, select, textarea {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        button {
+            position: relative;
+            overflow: hidden;
+            transform: translateZ(0);
+        }
+
+        button:not(:disabled) {
+            transition: transform 160ms ease, box-shadow 200ms ease, background-color 200ms ease, color 200ms ease, border-color 200ms ease;
+        }
+
+        button:not(:disabled):active {
+            transform: scale(0.97);
+        }
+
+        button:not(:disabled):focus-visible {
+            outline: 3px solid rgba(99, 102, 241, 0.35);
+            outline-offset: 2px;
+        }
+
+        .button-ripple {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 9999px;
+            background: currentColor;
+            opacity: 0.18;
+            pointer-events: none;
+            transform: translate(-50%, -50%) scale(0);
+            animation: buttonRipple 520ms ease-out forwards;
+        }
+
+        @keyframes buttonRipple {
+            to { transform: translate(-50%, -50%) scale(18); opacity: 0; }
+        }
+
+        .app-enter {
+            animation: appEnter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        @keyframes appEnter {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .modal-panel-enter {
+            animation: modalPanelEnter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        @keyframes modalPanelEnter {
+            from { opacity: 0; transform: translateY(12px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .notification-enter {
+            animation: notificationEnter 260ms ease-out both;
+        }
+
+        .calculation-row {
+            transition: background-color 180ms ease, transform 180ms ease;
+        }
+        .calculation-row:hover {
+            background-color: rgba(99, 102, 241, 0.06);
+            transform: translateX(2px);
+        }
+        .calculation-total {
+            background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(20, 184, 166, 0.08));
+        }
+
+        @keyframes notificationEnter {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
         }
     </style>
 </head>
@@ -413,7 +507,12 @@
                         <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200">Clientes cadastrados</h3>
                         <p class="text-[10px] text-gray-400">Toque em Informações para ver a segurança do acesso.</p>
                     </div>
-                    <input id="customer-search-input" oninput="filterCustomers()" type="search" placeholder="Pesquisar" class="w-32 sm:w-44 p-2 text-xs bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 custom-rounded">
+                    <div class="flex items-center gap-1">
+                        <input id="customer-search-input" oninput="filterCustomers()" type="search" placeholder="Pesquisar" class="w-28 sm:w-44 p-2 text-xs bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 custom-rounded">
+                        <button onclick="loadCustomers()" class="p-2 text-gray-500 hover:text-indigo-600 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 custom-rounded" title="Atualizar clientes" aria-label="Atualizar clientes">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M20 11a8 8 0 00-14.9-3M4 5v4h4M4 13a8 8 0 0014.9 3M20 19v-4h-4"></path></svg>
+                        </button>
+                    </div>
                 </div>
                 <div id="customer-list" class="space-y-2">
                     <p class="text-xs text-gray-400">Carregando...</p>
@@ -677,6 +776,7 @@
         let editingRecordId = null;
         let parsedImportData = [];
         let expiryTimer = null;
+        let customersUnsubscribe = null;
         let serverClockOffset = 0;
         let selectedCustomerId = null;
 
@@ -773,6 +873,33 @@
         const cardTopBar = document.getElementById('card-top-bar');
         const formTitle = document.getElementById('form-title');
         
+        // --- Microinterações e fluidez ---
+        document.addEventListener('click', (event) => {
+            const button = event.target.closest('button');
+            if (!button || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
+            const rect = button.getBoundingClientRect();
+            const ripple = document.createElement('span');
+            ripple.className = 'button-ripple';
+            ripple.style.left = `${event.clientX - rect.left}px`;
+            ripple.style.top = `${event.clientY - rect.top}px`;
+            button.appendChild(ripple);
+            ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
+        });
+
+        const animatedModals = document.querySelectorAll('[id$="-modal"]');
+        animatedModals.forEach(modal => {
+            const panel = modal.firstElementChild;
+            if (!panel) return;
+            const observer = new MutationObserver(() => {
+                if (!modal.classList.contains('hidden')) {
+                    panel.classList.remove('modal-panel-enter');
+                    void panel.offsetWidth;
+                    panel.classList.add('modal-panel-enter');
+                }
+            });
+            observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+        });
+
         // --- Radius Logic ---
         function setAppRadius(px) {
             currentRadius = parseInt(px);
@@ -794,13 +921,16 @@
         // Dark Mode Logic
         window.toggleDarkMode = function() {
             const html = document.documentElement;
-            if (html.classList.contains('dark')) {
-                html.classList.remove('dark');
-                localStorage.setItem('theme', 'light');
-            } else {
-                html.classList.add('dark');
-                localStorage.setItem('theme', 'dark');
-            }
+            const nextTheme = html.classList.contains('dark') ? 'light' : 'dark';
+
+            // Desativa transições durante a troca para evitar a renderização pesada
+            // de dezenas de elementos ao mesmo tempo em celulares.
+            html.classList.add('theme-changing');
+            html.classList.toggle('dark', nextTheme === 'dark');
+            localStorage.setItem('theme', nextTheme);
+            requestAnimationFrame(() => {
+                setTimeout(() => html.classList.remove('theme-changing'), 80);
+            });
         }
         
         if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -935,6 +1065,9 @@
             errorEl.textContent = message;
             errorEl.className = `hidden mx-auto mt-4 max-w-md p-4 text-sm rounded-r shadow-sm text-left custom-rounded border-l-4 ${type === 'success' ? 'bg-green-50 border-green-500 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-50 border-red-500 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`;
             errorEl.classList.remove('hidden');
+            errorEl.classList.remove('notification-enter');
+            void errorEl.offsetWidth;
+            errorEl.classList.add('notification-enter');
             setTimeout(() => errorEl.classList.add('hidden'), 5000);
         }
         function displayError(message) { showNotification(message, 'error'); }
@@ -947,6 +1080,7 @@
         }
 
         function showLoginScreen(message = '') {
+            stopCustomerLiveUpdates();
             if (expiryTimer) clearInterval(expiryTimer);
             expiryTimer = null;
             serverClockOffset = 0;
@@ -966,6 +1100,9 @@
         function hideLoginScreen() {
             loginLoading.classList.add('hidden');
             loginForm.classList.add('hidden');
+            document.getElementById('app').classList.remove('app-enter');
+            void document.getElementById('app').offsetWidth;
+            document.getElementById('app').classList.add('app-enter');
             menuToggle.classList.remove('hidden');
             loginScreen.classList.add('hidden');
             logoutBtn.classList.remove('hidden');
@@ -1157,6 +1294,7 @@
                 if (expiryTimer) clearInterval(expiryTimer);
                 expiryCountdown.classList.add('hidden');
                 loadCustomers();
+                startCustomerLiveUpdates();
             } else {
                 const deviceAccepted = await claimCustomerDevice(user.uid, user.email);
                 if (!deviceAccepted) return;
@@ -1234,6 +1372,20 @@
             });
         };
 
+        function startCustomerLiveUpdates() {
+            if (customersUnsubscribe) customersUnsubscribe();
+            customersUnsubscribe = onSnapshot(collection(db, 'users'), () => {
+                loadCustomers();
+            }, (error) => {
+                console.warn('Atualização automática dos clientes indisponível:', error);
+            });
+        }
+
+        function stopCustomerLiveUpdates() {
+            if (customersUnsubscribe) customersUnsubscribe();
+            customersUnsubscribe = null;
+        }
+
         async function loadCustomers() {
             if (!auth.currentUser || (auth.currentUser.email || '').toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return;
             try {
@@ -1258,15 +1410,16 @@
                     const deviceLabel = customer.deviceId
                         ? `Aparelho vinculado${deviceRegistered ? ` em ${deviceRegistered.toLocaleDateString('pt-BR')}` : ''}`
                         : 'Nenhum aparelho vinculado';
-                    const attemptLabel = lastDeviceAttempt
-                        ? `Outro aparelho tentou acessar em ${lastDeviceAttempt.toLocaleString('pt-BR')}`
+                    const hasAlert = Boolean(lastDeviceAttempt || (Array.isArray(customer.deviceAttemptHistory) && customer.deviceAttemptHistory.length));
+                    const alertButton = hasAlert
+                        ? `<button onclick="event.stopPropagation(); openCustomerInfo('${customer.id}')" class="inline-flex items-center gap-1 mt-1 px-2 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-full hover:bg-amber-200 dark:hover:bg-amber-900/50"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v3m0 3h.01M10.3 4.6l-7.2 12.5A1.8 1.8 0 004.66 20h14.68a1.8 1.8 0 001.56-2.9L13.7 4.6a1.96 1.96 0 00-3.4 0z"></path></svg>Alerta de segurança</button>`
                         : '';
                     return `<div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 custom-rounded">
                         <div class="min-w-0">
                             <button onclick="openCustomerManager('${customer.id}')" class="text-left text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:underline truncate max-w-full">${escapeHtml(customer.email)}</button>
                             <p class="text-[10px] ${expired ? 'text-red-500' : 'text-green-600'}">${customer.active === false ? 'Bloqueado' : (expired ? 'Vencido' : `Válido até ${expiration.toLocaleString('pt-BR')}`)}</p>
                             <p class="text-[10px] ${customer.deviceId ? 'text-indigo-600 dark:text-indigo-300' : 'text-gray-400'}">${deviceLabel}</p>
-
+                            ${alertButton}
                         </div>
                         <div class="flex gap-1">
                             <button onclick="renewCustomer('${customer.id}', 30)" class="px-2 py-1 text-[10px] font-bold bg-green-600 text-white rounded">+30 dias</button>
@@ -1665,52 +1818,56 @@
             if (!record) return;
 
             let html = `<div class="mb-4 text-center">
-                <span class="text-xs font-bold text-gray-400 uppercase">Horas ${record.hours < 0 ? 'Faltadas' : 'Trabalhadas'}</span>
-                <p class="text-xl font-bold text-gray-800 dark:text-white">${formatDecimalToHMM(record.hours)}</p>
+                <div class="mx-auto mb-2 w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 7h6m-6 4h6m-8 8h10a2 2 0 002-2V7.5L15.5 4H7a2 2 0 00-2 2v11a2 2 0 002 2z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 4v4h4"></path></svg>
+                </div>
+                <span class="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Como chegamos a este valor</span>
+                <p class="text-xl font-extrabold text-gray-800 dark:text-white mt-1">${formatDecimalToHMM(record.hours)}</p>
+                <p class="text-[11px] text-gray-400">${record.hours < 0 ? 'Horas faltadas' : 'Horas trabalhadas'} × adicionais aplicáveis</p>
             </div>`;
 
-            html += `<div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-2">`;
+            html += `<div class="bg-gray-50 dark:bg-gray-700/50 rounded-2xl p-3 space-y-1 border border-gray-100 dark:border-gray-600">`;
             
             let totalPaid = 0;
             if (record.hours > 0 && record.tiers) {
-                record.tiers.forEach(t => {
+                record.tiers.forEach((t, index) => {
                     const tierPaid = t.originalHours * t.multiplier;
                     totalPaid += tierPaid;
                     html += `
-                    <div class="flex justify-between items-center text-xs">
+                    <div class="calculation-row flex justify-between items-center gap-3 px-2.5 py-2 rounded-xl text-xs">
                         <span class="text-gray-500 dark:text-gray-400">
-                            ${formatDecimalToHMM(t.originalHours)} <span class="text-indigo-500 font-bold">x${t.multiplier}</span>
+                            <span class="block text-[10px] uppercase font-bold text-gray-400">Faixa ${index + 1}</span>
+                            ${formatDecimalToHMM(t.originalHours)} <span class="text-indigo-500 font-bold">× ${t.multiplier}</span>
                         </span>
-                        <span class="font-mono font-bold text-gray-700 dark:text-gray-200">
-                            = ${tierPaid.toFixed(4)}h
+                        <span class="font-mono font-bold text-gray-700 dark:text-gray-200 whitespace-nowrap">
+                            ${tierPaid.toFixed(4)}h
                         </span>
                     </div>`;
                 });
             } else {
                 totalPaid = Math.abs(record.totalPaidHours);
                 html += `
-                <div class="flex justify-between items-center text-xs">
+                <div class="calculation-row flex justify-between items-center gap-3 px-2.5 py-2 rounded-xl text-xs">
                     <span class="text-gray-500 dark:text-gray-400">
-                       Cálculo de Falta
+                       <span class="block text-[10px] uppercase font-bold text-gray-400">Desconto</span>
+                       Cálculo de falta
                     </span>
-                    <span class="font-mono font-bold text-red-700 dark:text-red-200">
-                        = -${totalPaid.toFixed(4)}h
+                    <span class="font-mono font-bold text-red-700 dark:text-red-200 whitespace-nowrap">
+                        -${totalPaid.toFixed(4)}h
                     </span>
                 </div>`;
             }
             
-            html += `<div class="border-t border-gray-200 dark:border-gray-600 mt-2 pt-2 flex justify-between items-center font-bold">
-                <span class="text-gray-600 dark:text-gray-300">Total Pago:</span>
+            html += `<div class="calculation-total border-t border-gray-200 dark:border-gray-600 mt-2 pt-3 px-3 pb-2 rounded-xl flex justify-between items-center font-bold">
+                <span class="text-gray-600 dark:text-gray-300">Total equivalente</span>
                 <span class="${record.hours < 0 ? 'text-red-600 dark:text-red-400' : 'text-indigo-600 dark:text-indigo-400'}">${record.hours < 0 ? '-' : ''}${totalPaid.toFixed(4)}h</span>
             </div>`;
             
             const preciseVal = totalPaid * hourlyRate;
             html += `</div>`;
-            html += `<div class="mt-4 text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <div class="flex justify-between">
-                    <span>Cálculo Preciso:</span>
-                    <span class="font-bold">${formatCurrency(preciseVal)}</span>
-                </div>
+            html += `<div class="mt-3 p-3 rounded-2xl bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800/40 text-xs text-gray-600 dark:text-gray-300 space-y-2">
+                <div class="flex justify-between"><span>Valor da hora</span><span class="font-bold">${formatCurrency(hourlyRate)}</span></div>
+                <div class="flex justify-between items-center pt-2 border-t border-teal-100 dark:border-teal-800/40"><span class="font-bold">Valor calculado</span><span class="text-base font-extrabold text-teal-700 dark:text-teal-300">${formatCurrency(preciseVal)}</span></div>
             </div>`;
 
             calcContent.innerHTML = html;
