@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Banco de Horas | Versão de teste 1.4.2: alertas clicáveis e painel em tempo real -->
+    <!-- Banco de Horas | Versão de teste 1.5.0: painel de segurança refinado -->
     <title>Controle de Horas Extras e Faltas</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -779,12 +779,14 @@
         let customersUnsubscribe = null;
         let serverClockOffset = 0;
         let selectedCustomerId = null;
+        let infoCustomerId = null;
 
         const LOCAL_STORAGE_KEY = 'overtime_auth_token_v7_inline';
         const RADIUS_STORAGE_KEY = 'overtime_radius_pref';
         const LOCAL_RECORDS_KEY = `overtime_records_local_v8_${appId}`;
         const LOCAL_SETTINGS_KEY = `overtime_settings_local_v8_${appId}`;
         const DEVICE_KEY_PREFIX = `bank_hours_device_${appId}_`;
+        const DEVICE_COOKIE_PREFIX = `bh_device_${appId}_`;
 
         // DOM
         const authStatusEl = document.getElementById('auth-status');
@@ -1181,22 +1183,56 @@
             serverClockOffset = serverNow.getTime() - Date.now();
         }
 
-        function getDeviceId(uid) {
-            const key = `${DEVICE_KEY_PREFIX}${uid}`;
+        function createDeviceId() {
+            return crypto.randomUUID
+                ? crypto.randomUUID()
+                : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        }
+
+        function readDeviceCookie(name) {
+            const prefix = `${encodeURIComponent(name)}=`;
+            const item = document.cookie.split('; ').find(row => row.startsWith(prefix));
+            return item ? decodeURIComponent(item.slice(prefix.length)) : '';
+        }
+
+        function saveDeviceCookie(name, value) {
             try {
-                let deviceId = localStorage.getItem(key);
-                if (!deviceId) {
-                    deviceId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`);
-                    localStorage.setItem(key, deviceId);
-                }
-                return deviceId;
+                document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; max-age=31536000; path=/; SameSite=Lax`;
             } catch (error) {
-                return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                console.warn('Não foi possível salvar a identificação alternativa do aparelho:', error);
             }
         }
 
+        function persistDeviceId(uid, deviceId) {
+            const storageKey = `${DEVICE_KEY_PREFIX}${uid}`;
+            const cookieKey = `${DEVICE_COOKIE_PREFIX}${uid}`;
+            try { localStorage.setItem(storageKey, deviceId); } catch (error) { /* segue com o cookie */ }
+            saveDeviceCookie(cookieKey, deviceId);
+        }
+
+        function getDeviceIds(uid) {
+            const storageKey = `${DEVICE_KEY_PREFIX}${uid}`;
+            const cookieKey = `${DEVICE_COOKIE_PREFIX}${uid}`;
+            const ids = [];
+            try {
+                const localId = localStorage.getItem(storageKey);
+                if (localId) ids.push(localId);
+            } catch (error) { /* armazenamento local indisponível */ }
+            const cookieId = readDeviceCookie(cookieKey);
+            if (cookieId && !ids.includes(cookieId)) ids.push(cookieId);
+            return ids;
+        }
+
+        function getDeviceId(uid) {
+            const existingIds = getDeviceIds(uid);
+            const deviceId = existingIds[0] || createDeviceId();
+            persistDeviceId(uid, deviceId);
+            return deviceId;
+        }
+
         async function claimCustomerDevice(uid, email) {
-            const deviceId = getDeviceId(uid);
+            const deviceIds = getDeviceIds(uid);
+            const deviceId = deviceIds[0] || getDeviceId(uid);
             const userRef = doc(db, 'users', uid);
             let deviceBlocked = false;
             try {
@@ -1207,11 +1243,20 @@
                     if (!profile.deviceId) {
                         transaction.update(userRef, {
                             deviceId,
-                            deviceRegisteredAt: serverTimestamp()
+                            deviceRegisteredAt: serverTimestamp(),
+                            lastDeviceAccessAt: serverTimestamp(),
+                            deviceBrowser: navigator.userAgent.slice(0, 160)
                         });
-                    } else if (profile.deviceId !== deviceId) {
+                    } else if (!deviceIds.includes(profile.deviceId)) {
                         deviceBlocked = true;
                         throw new Error('DEVICE_ALREADY_REGISTERED');
+                    } else {
+                        // Se um dos armazenamentos sobreviveu, restaura o outro automaticamente.
+                        persistDeviceId(uid, profile.deviceId);
+                        transaction.update(userRef, {
+                            lastDeviceAccessAt: serverTimestamp(),
+                            deviceBrowser: navigator.userAgent.slice(0, 160)
+                        });
                     }
                 });
                 return true;
@@ -1231,7 +1276,7 @@
                         console.warn('Não foi possível registrar a tentativa de aparelho:', logError);
                     }
                     await signOut(auth);
-                    showLoginScreen(`Detectamos outro aparelho tentando acessar a conta ${email || 'deste usuário'}. O acesso foi bloqueado. Fale com o administrador para liberar este aparelho.`);
+                    showLoginScreen(`Este aparelho ou navegador não está autorizado para a conta ${email || 'deste usuário'}. Use o endereço oficial e o navegador do primeiro acesso, ou fale com o administrador para liberar este aparelho.`);
                     return false;
                 }
                 throw error;
@@ -1394,7 +1439,11 @@
                 snapshot.forEach(item => customers.push({ id: item.id, ...item.data() }));
                 const now = new Date();
                 const activeCount = customers.filter(customer => customer.active !== false && toDate(customer.expiresAt) && toDate(customer.expiresAt) > now).length;
-                const alertCount = customers.filter(customer => customer.lastDeviceAttemptAt || (Array.isArray(customer.deviceAttemptHistory) && customer.deviceAttemptHistory.length)).length;
+                const alertCount = customers.filter(customer => {
+                    const attempt = toDate(customer.lastDeviceAttemptAt);
+                    const seen = toDate(customer.deviceAlertSeenAt);
+                    return attempt && (!seen || attempt > seen);
+                }).length;
                 adminStatTotal.textContent = customers.length;
                 adminStatActive.textContent = activeCount;
                 adminStatAlerts.textContent = alertCount;
@@ -1406,19 +1455,26 @@
                     const expiration = toDate(customer.expiresAt);
                     const deviceRegistered = toDate(customer.deviceRegisteredAt);
                     const lastDeviceAttempt = toDate(customer.lastDeviceAttemptAt);
+                    const alertSeenAt = toDate(customer.deviceAlertSeenAt);
+                    const lastDeviceAccess = toDate(customer.lastDeviceAccessAt);
+                    const hasNewAlert = Boolean(lastDeviceAttempt && (!alertSeenAt || lastDeviceAttempt > alertSeenAt));
                     const expired = !expiration || expiration <= new Date() || customer.active === false;
                     const deviceLabel = customer.deviceId
-                        ? `Aparelho vinculado${deviceRegistered ? ` em ${deviceRegistered.toLocaleDateString('pt-BR')}` : ''}`
-                        : 'Nenhum aparelho vinculado';
+                        ? `Aparelho autorizado${deviceRegistered ? ` desde ${deviceRegistered.toLocaleDateString('pt-BR')}` : ''}`
+                        : 'Nenhum aparelho autorizado';
+                    const deviceMeta = customer.deviceBrowser
+                        ? escapeHtml(customer.deviceBrowser.replace(/\s+/g, ' ').slice(0, 58))
+                        : '';
                     const hasAlert = Boolean(lastDeviceAttempt || (Array.isArray(customer.deviceAttemptHistory) && customer.deviceAttemptHistory.length));
                     const alertButton = hasAlert
-                        ? `<button onclick="event.stopPropagation(); openCustomerInfo('${customer.id}')" class="inline-flex items-center gap-1 mt-1 px-2 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-full hover:bg-amber-200 dark:hover:bg-amber-900/50"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v3m0 3h.01M10.3 4.6l-7.2 12.5A1.8 1.8 0 004.66 20h14.68a1.8 1.8 0 001.56-2.9L13.7 4.6a1.96 1.96 0 00-3.4 0z"></path></svg>Alerta de segurança</button>`
+                        ? `<button onclick="event.stopPropagation(); openCustomerInfo('${customer.id}')" class="inline-flex items-center gap-1 mt-1 px-2 py-1 text-[10px] font-bold ${hasNewAlert ? 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800' : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600'} border rounded-full hover:opacity-80"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v3m0 3h.01M10.3 4.6l-7.2 12.5A1.8 1.8 0 004.66 20h14.68a1.8 1.8 0 001.56-2.9L13.7 4.6a1.96 1.96 0 00-3.4 0z"></path></svg>${hasNewAlert ? 'Novo alerta' : 'Histórico de segurança'}</button>`
                         : '';
                     return `<div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 custom-rounded">
                         <div class="min-w-0">
                             <button onclick="openCustomerManager('${customer.id}')" class="text-left text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:underline truncate max-w-full">${escapeHtml(customer.email)}</button>
                             <p class="text-[10px] ${expired ? 'text-red-500' : 'text-green-600'}">${customer.active === false ? 'Bloqueado' : (expired ? 'Vencido' : `Válido até ${expiration.toLocaleString('pt-BR')}`)}</p>
                             <p class="text-[10px] ${customer.deviceId ? 'text-indigo-600 dark:text-indigo-300' : 'text-gray-400'}">${deviceLabel}</p>
+                            ${deviceMeta ? `<p class="text-[10px] text-gray-400 dark:text-gray-500 truncate max-w-[260px]">${deviceMeta}${lastDeviceAccess ? ` · último acesso ${lastDeviceAccess.toLocaleString('pt-BR')}` : ''}</p>` : (lastDeviceAccess ? `<p class="text-[10px] text-gray-400 dark:text-gray-500">Último acesso ${lastDeviceAccess.toLocaleString('pt-BR')}</p>` : '')}
                             ${alertButton}
                         </div>
                         <div class="flex gap-1">
@@ -1439,6 +1495,7 @@
 
         window.openCustomerInfo = async function(uid) {
             try {
+                infoCustomerId = uid;
                 customerInfoModal.classList.remove('hidden');
                 customerInfoContent.textContent = 'Carregando informações...';
                 const snapshot = await getDoc(doc(db, 'users', uid));
@@ -1449,6 +1506,10 @@
                 const customer = snapshot.data();
                 customerInfoEmail.textContent = customer.email || 'Cliente';
                 const registered = toDate(customer.deviceRegisteredAt);
+                const lastAccess = toDate(customer.lastDeviceAccessAt);
+                const seenAt = toDate(customer.deviceAlertSeenAt);
+                const latestAttempt = toDate(customer.lastDeviceAttemptAt);
+                const hasNewAlert = Boolean(latestAttempt && (!seenAt || latestAttempt > seenAt));
                 let history = Array.isArray(customer.deviceAttemptHistory) ? customer.deviceAttemptHistory.slice().reverse() : [];
                 if (!history.length && customer.lastDeviceAttemptAt) {
                     const previousAttempt = toDate(customer.lastDeviceAttemptAt);
@@ -1465,10 +1526,16 @@
                     <div class="p-3 bg-gray-50 dark:bg-gray-700/50 custom-rounded">
                         <p class="font-bold">Aparelho autorizado</p>
                         <p class="mt-1">${customer.deviceId ? `Vinculado${registered ? ` em ${registered.toLocaleString('pt-BR')}` : ''}` : 'Nenhum aparelho vinculado'}</p>
+                        ${customer.deviceBrowser ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-2 break-words">Navegador: ${escapeHtml(customer.deviceBrowser)}</p>` : ''}
+                        ${lastAccess ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Último acesso: ${lastAccess.toLocaleString('pt-BR')}</p>` : ''}
                     </div>
                     <div>
-                        <p class="font-bold mb-2">Histórico de tentativas</p>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <p class="font-bold">Histórico de tentativas</p>
+                            ${hasNewAlert ? '<span class="text-[10px] font-bold text-amber-700 dark:text-amber-300">NOVO</span>' : ''}
+                        </div>
                         <div class="space-y-2">${historyHtml}</div>
+                        ${hasNewAlert ? '<button onclick="markCustomerAlertsRead()" class="w-full mt-3 py-2 text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 custom-rounded">Marcar alertas como visualizados</button>' : ''}
                     </div>`;
             } catch (error) {
                 console.error('Falha ao carregar informações do aparelho:', error);
@@ -1476,7 +1543,23 @@
             }
         };
 
+        window.markCustomerAlertsRead = async function() {
+            if (!infoCustomerId) return;
+            try {
+                await setDoc(doc(db, 'users', infoCustomerId), {
+                    deviceAlertSeenAt: serverTimestamp()
+                }, { merge: true });
+                showNotification('Alertas marcados como visualizados.', 'success');
+                await openCustomerInfo(infoCustomerId);
+                loadCustomers();
+            } catch (error) {
+                console.error('Falha ao marcar alertas:', error);
+                displayError('Não foi possível atualizar os alertas.');
+            }
+        };
+
         window.closeCustomerInfo = function() {
+            infoCustomerId = null;
             customerInfoModal.classList.add('hidden');
         };
 
@@ -1505,13 +1588,15 @@
 
         window.releaseCustomerDevice = async function() {
             if (!selectedCustomerId) return;
-            if (!confirm('Liberar este cliente para entrar em outro aparelho?')) return;
+            if (!confirm('Liberar este cliente? O próximo aparelho que entrar será o novo aparelho autorizado. O histórico de alertas será mantido.')) return;
             try {
                 await setDoc(doc(db, 'users', selectedCustomerId), {
                     deviceId: deleteField(),
                     deviceRegisteredAt: deleteField(),
                     lastDeviceAttemptAt: deleteField(),
-                    lastDeviceAttemptDevice: deleteField()
+                    lastDeviceAttemptDevice: deleteField(),
+                    lastDeviceAccessAt: deleteField(),
+                    deviceBrowser: deleteField()
                 }, { merge: true });
                 showNotification('Aparelho liberado. O próximo celular poderá entrar.', 'success');
                 closeCustomerManager();
