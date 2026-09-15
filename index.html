@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Banco de Horas | Versão de teste 1.5.0: painel de segurança refinado -->
+    <!-- Banco de Horas | Versão de teste 1.6.4: limpeza definitiva da tela de saída -->
     <title>Controle de Horas Extras e Faltas</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -546,6 +546,8 @@
                 <button onclick="addCustomerTime()" class="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-sm custom-rounded">Adicionar tempo</button>
                 <button onclick="setCustomerTime()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm custom-rounded">Definir a partir de agora</button>
                 <button onclick="releaseCustomerDevice()" class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm custom-rounded">Liberar outro aparelho</button>
+                <button id="payment-status-btn" onclick="toggleCustomerPaymentStatus()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm custom-rounded">Marcar como pago</button>
+                <button id="undo-renewal-btn" onclick="undoLastRenewal()" class="hidden w-full py-2.5 bg-gray-600 hover:bg-gray-700 text-white font-bold text-sm custom-rounded">Desfazer última renovação</button>
                 <button onclick="closeCustomerManager()" class="w-full py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-sm custom-rounded">Cancelar</button>
             </div>
             <p class="text-[10px] text-gray-400 text-center mt-3">Use “Adicionar tempo” para renovações e “Definir” para testes ou correções.</p>
@@ -779,6 +781,7 @@
         let customersUnsubscribe = null;
         let serverClockOffset = 0;
         let selectedCustomerId = null;
+        let suppressLogoutMessage = false;
         let infoCustomerId = null;
 
         const LOCAL_STORAGE_KEY = 'overtime_auth_token_v7_inline';
@@ -857,6 +860,8 @@
         const customerInfoContent = document.getElementById('customer-info-content');
         const manageCustomerEmail = document.getElementById('manage-customer-email');
         const manageCustomerExpiration = document.getElementById('manage-customer-expiration');
+        const paymentStatusBtn = document.getElementById('payment-status-btn');
+        const undoRenewalBtn = document.getElementById('undo-renewal-btn');
         const manageDurationInput = document.getElementById('manage-duration-input');
         const manageDurationUnit = document.getElementById('manage-duration-unit');
         const manualPaymentCard = document.getElementById('manual-payment-card');
@@ -1075,10 +1080,18 @@
         function displayError(message) { showNotification(message, 'error'); }
 
         function setLoginError(message) {
-            loginError.textContent = message;
+            loginError.textContent = message || '';
             loginError.className = message
                 ? 'text-sm text-red-600 dark:text-red-400 text-center'
                 : 'hidden text-sm text-red-600 dark:text-red-400 text-center';
+            if (!message) loginError.setAttribute('aria-hidden', 'true');
+            else loginError.removeAttribute('aria-hidden');
+        }
+
+        function clearLoginMessages() {
+            loginError.textContent = '';
+            loginError.className = 'hidden text-sm text-red-600 dark:text-red-400 text-center';
+            loginError.setAttribute('aria-hidden', 'true');
         }
 
         function showLoginScreen(message = '') {
@@ -1096,7 +1109,8 @@
             logoutBtn.classList.add('hidden');
             adminPanel.classList.add('hidden');
             manualPaymentCard.classList.add('hidden');
-            setLoginError(message);
+            if (message) setLoginError(message);
+            else clearLoginMessages();
         }
 
         function hideLoginScreen() {
@@ -1146,9 +1160,13 @@
         };
 
         window.logoutApp = async function() {
+            suppressLogoutMessage = true;
             if (auth) await signOut(auth);
             logoutBtn.classList.add('hidden');
+            clearLoginMessages();
             showLoginScreen();
+            clearLoginMessages();
+            setTimeout(() => { suppressLogoutMessage = false; }, 300);
         };
 
         window.copyPixKey = async function() {
@@ -1181,6 +1199,25 @@
             const serverNow = clockSnap.exists() ? toDate(clockSnap.data().serverNow) : null;
             if (!serverNow) throw new Error('SERVER_CLOCK_UNAVAILABLE');
             serverClockOffset = serverNow.getTime() - Date.now();
+        }
+
+        function detectBrowser(userAgent = navigator.userAgent) {
+            const ua = String(userAgent || '');
+            if (/Edg\//i.test(ua)) return 'Microsoft Edge';
+            if (/OPR\//i.test(ua) || /Opera/i.test(ua)) return 'Opera';
+            if (/SamsungBrowser/i.test(ua)) return 'Samsung Internet';
+            if (/CriOS/i.test(ua)) return 'Chrome (iPhone/iPad)';
+            if (/FxiOS/i.test(ua)) return 'Firefox (iPhone/iPad)';
+            if (/Firefox/i.test(ua)) return 'Firefox';
+            if (/Chrome|Chromium/i.test(ua)) return 'Chrome';
+            if (/Safari/i.test(ua) && /Version\//i.test(ua)) return 'Safari';
+            if (/Android/i.test(ua)) return 'Navegador Android';
+            return 'Navegador não identificado';
+        }
+
+        function browserLabel(value) {
+            const text = String(value || '');
+            return text.includes('Mozilla/') ? detectBrowser(text) : (text || 'Navegador não informado');
         }
 
         function createDeviceId() {
@@ -1245,7 +1282,7 @@
                             deviceId,
                             deviceRegisteredAt: serverTimestamp(),
                             lastDeviceAccessAt: serverTimestamp(),
-                            deviceBrowser: navigator.userAgent.slice(0, 160)
+                            deviceBrowser: detectBrowser()
                         });
                     } else if (!deviceIds.includes(profile.deviceId)) {
                         deviceBlocked = true;
@@ -1255,7 +1292,7 @@
                         persistDeviceId(uid, profile.deviceId);
                         transaction.update(userRef, {
                             lastDeviceAccessAt: serverTimestamp(),
-                            deviceBrowser: navigator.userAgent.slice(0, 160)
+                            deviceBrowser: detectBrowser()
                         });
                     }
                 });
@@ -1269,17 +1306,33 @@
                             deviceAttemptHistory: arrayUnion({
                                 attemptedAt: new Date().toISOString(),
                                 deviceId,
-                                browser: navigator.userAgent.slice(0, 160)
+                                browser: detectBrowser()
                             })
                         }, { merge: true });
                     } catch (logError) {
                         console.warn('Não foi possível registrar a tentativa de aparelho:', logError);
                     }
                     await signOut(auth);
-                    showLoginScreen(`Este aparelho ou navegador não está autorizado para a conta ${email || 'deste usuário'}. Use o endereço oficial e o navegador do primeiro acesso, ou fale com o administrador para liberar este aparelho.`);
+                    if (!suppressLogoutMessage) {
+                        showLoginScreen('Acesso não autorizado neste aparelho. As credenciais estão corretas, porém este dispositivo não está vinculado a esta conta. Solicite ao administrador a autorização deste aparelho.');
+                    } else {
+                        showLoginScreen();
+                    }
                     return false;
                 }
                 throw error;
+            }
+        }
+
+        async function recordAccessEvent(uid) {
+            try {
+                await addDoc(collection(db, `artifacts/${appId}/users/${uid}/access_history`), {
+                    accessedAt: serverTimestamp(),
+                    browser: detectBrowser(),
+                    type: 'login'
+                });
+            } catch (error) {
+                console.warn('Não foi possível registrar o acesso:', error);
             }
         }
 
@@ -1321,7 +1374,9 @@
                 // O Firestore valida o vencimento usando request.time no servidor.
                 if (!profile || profile.active === false || !expiration) {
                     await signOut(auth);
-                    showLoginScreen('Acesso vencido ou ainda não liberado. Fale com o administrador.');
+                    showLoginScreen(profile && profile.active === false
+                        ? 'Acesso bloqueado pelo administrador. Solicite a reativação do acesso.'
+                        : 'Acesso não liberado ou prazo encerrado. Consulte o administrador.');
                     return;
                 }
             }
@@ -1344,6 +1399,7 @@
                 const deviceAccepted = await claimCustomerDevice(user.uid, user.email);
                 if (!deviceAccepted) return;
                 await syncServerClock(user.uid);
+                await recordAccessEvent(user.uid);
                 startExpiryCountdown(toDate(profile.expiresAt));
             }
             hideLoginScreen();
@@ -1372,7 +1428,7 @@
                 console.error('Falha no login:', error);
                 setLoginError(error.message === 'LOGIN_TIMEOUT'
                     ? 'A conexão demorou demais. Verifique a internet e tente novamente.'
-                    : 'E-mail ou senha inválidos.');
+                    : 'E-mail ou senha incorretos. Verifique os dados e tente novamente.');
             } finally {
                 loginSubmit.disabled = false;
                 loginSubmit.textContent = 'Entrar';
@@ -1463,15 +1519,20 @@
                         ? `Aparelho autorizado${deviceRegistered ? ` desde ${deviceRegistered.toLocaleDateString('pt-BR')}` : ''}`
                         : 'Nenhum aparelho autorizado';
                     const deviceMeta = customer.deviceBrowser
-                        ? escapeHtml(customer.deviceBrowser.replace(/\s+/g, ' ').slice(0, 58))
+                        ? escapeHtml(browserLabel(customer.deviceBrowser))
                         : '';
+                    const isPaid = customer.paymentStatus === 'paid';
+                    const paymentBadge = `<button onclick="event.stopPropagation(); toggleCustomerPaymentStatus('${customer.id}')" class="inline-flex items-center px-2 py-0.5 mt-1 text-[10px] font-bold rounded-full ${isPaid ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}">${isPaid ? 'Pago' : 'Não pago'}</button>`;
                     const hasAlert = Boolean(lastDeviceAttempt || (Array.isArray(customer.deviceAttemptHistory) && customer.deviceAttemptHistory.length));
                     const alertButton = hasAlert
                         ? `<button onclick="event.stopPropagation(); openCustomerInfo('${customer.id}')" class="inline-flex items-center gap-1 mt-1 px-2 py-1 text-[10px] font-bold ${hasNewAlert ? 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800' : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600'} border rounded-full hover:opacity-80"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v3m0 3h.01M10.3 4.6l-7.2 12.5A1.8 1.8 0 004.66 20h14.68a1.8 1.8 0 001.56-2.9L13.7 4.6a1.96 1.96 0 00-3.4 0z"></path></svg>${hasNewAlert ? 'Novo alerta' : 'Histórico de segurança'}</button>`
                         : '';
                     return `<div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 custom-rounded">
                         <div class="min-w-0">
-                            <button onclick="openCustomerManager('${customer.id}')" class="text-left text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:underline truncate max-w-full">${escapeHtml(customer.email)}</button>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <button onclick="openCustomerManager('${customer.id}')" class="text-left text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:underline truncate max-w-full">${escapeHtml(customer.email)}</button>
+                                ${paymentBadge}
+                            </div>
                             <p class="text-[10px] ${expired ? 'text-red-500' : 'text-green-600'}">${customer.active === false ? 'Bloqueado' : (expired ? 'Vencido' : `Válido até ${expiration.toLocaleString('pt-BR')}`)}</p>
                             <p class="text-[10px] ${customer.deviceId ? 'text-indigo-600 dark:text-indigo-300' : 'text-gray-400'}">${deviceLabel}</p>
                             ${deviceMeta ? `<p class="text-[10px] text-gray-400 dark:text-gray-500 truncate max-w-[260px]">${deviceMeta}${lastDeviceAccess ? ` · último acesso ${lastDeviceAccess.toLocaleString('pt-BR')}` : ''}</p>` : (lastDeviceAccess ? `<p class="text-[10px] text-gray-400 dark:text-gray-500">Último acesso ${lastDeviceAccess.toLocaleString('pt-BR')}</p>` : '')}
@@ -1505,6 +1566,14 @@
                 }
                 const customer = snapshot.data();
                 customerInfoEmail.textContent = customer.email || 'Cliente';
+                let accessHistory = [];
+                try {
+                    const accessSnapshot = await getDocs(collection(db, `artifacts/${appId}/users/${uid}/access_history`));
+                    accessSnapshot.forEach(item => accessHistory.push(item.data()));
+                    accessHistory.sort((a, b) => (toDate(b.accessedAt)?.getTime() || 0) - (toDate(a.accessedAt)?.getTime() || 0));
+                } catch (accessError) {
+                    console.warn('Não foi possível carregar o histórico de acessos:', accessError);
+                }
                 const registered = toDate(customer.deviceRegisteredAt);
                 const lastAccess = toDate(customer.lastDeviceAccessAt);
                 const seenAt = toDate(customer.deviceAlertSeenAt);
@@ -1519,17 +1588,25 @@
                     ? history.slice(0, 10).map(item => {
                         const attempted = item.attemptedAt ? new Date(item.attemptedAt) : null;
                         const dateText = attempted && !Number.isNaN(attempted.getTime()) ? attempted.toLocaleString('pt-BR') : 'Data não disponível';
-                        return `<div class="p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 custom-rounded"><p class="font-bold text-amber-700 dark:text-amber-300">Tentativa bloqueada</p><p class="text-[11px] mt-1">${dateText}</p>${item.browser ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 break-words">${escapeHtml(item.browser)}</p>` : ''}</div>`;
+                        return `<div class="p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 custom-rounded"><p class="font-bold text-amber-700 dark:text-amber-300">Tentativa bloqueada</p><p class="text-[11px] mt-1">${dateText}</p>${item.browser ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 break-words">Navegador: ${escapeHtml(browserLabel(item.browser))}</p>` : ''}</div>`;
                     }).join('')
                     : '<p class="text-gray-400">Nenhuma tentativa bloqueada registrada.</p>';
+                const accessHtml = accessHistory.length
+                    ? accessHistory.slice(0, 10).map(item => {
+                        const accessed = toDate(item.accessedAt);
+                        return `<div class="flex items-center justify-between gap-3 p-2 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 custom-rounded"><span class="font-bold text-green-700 dark:text-green-300">Acesso realizado</span><span class="text-[10px] text-gray-600 dark:text-gray-300 text-right">${accessed ? accessed.toLocaleString('pt-BR') : 'Agora'}<br>${escapeHtml(browserLabel(item.browser))}</span></div>`;
+                    }).join('')
+                    : '<p class="text-gray-400">Nenhum acesso registrado ainda.</p>';
                 customerInfoContent.innerHTML = `
                     <div class="p-3 bg-gray-50 dark:bg-gray-700/50 custom-rounded">
                         <p class="font-bold">Aparelho autorizado</p>
                         <p class="mt-1">${customer.deviceId ? `Vinculado${registered ? ` em ${registered.toLocaleString('pt-BR')}` : ''}` : 'Nenhum aparelho vinculado'}</p>
-                        ${customer.deviceBrowser ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-2 break-words">Navegador: ${escapeHtml(customer.deviceBrowser)}</p>` : ''}
+                        ${customer.deviceBrowser ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-2 break-words">Navegador: ${escapeHtml(browserLabel(customer.deviceBrowser))}</p>` : ''}
                         ${lastAccess ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Último acesso: ${lastAccess.toLocaleString('pt-BR')}</p>` : ''}
                     </div>
                     <div>
+                        <p class="font-bold mb-2">Histórico de acessos</p>
+                        <div class="space-y-2 mb-4">${accessHtml}</div>
                         <div class="flex items-center justify-between gap-2 mb-2">
                             <p class="font-bold">Histórico de tentativas</p>
                             ${hasNewAlert ? '<span class="text-[10px] font-bold text-amber-700 dark:text-amber-300">NOVO</span>' : ''}
@@ -1572,6 +1649,11 @@
                 manageCustomerEmail.textContent = customer.email || 'Cliente';
                 const expiration = toDate(customer.expiresAt);
                 manageCustomerExpiration.textContent = expiration ? expiration.toLocaleString('pt-BR') : 'Sem validade definida';
+                paymentStatusBtn.textContent = customer.paymentStatus === 'paid' ? 'Marcar como não pago' : 'Marcar como pago';
+                paymentStatusBtn.className = customer.paymentStatus === 'paid'
+                    ? 'w-full py-2.5 bg-red-500 hover:bg-red-600 text-white font-bold text-sm custom-rounded'
+                    : 'w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm custom-rounded';
+                undoRenewalBtn.classList.toggle('hidden', !customer.lastRenewalPreviousExpiresAt);
                 manageDurationInput.value = 30;
                 manageDurationUnit.value = 'days';
                 customerManageModal.classList.remove('hidden');
@@ -1584,6 +1666,25 @@
         window.closeCustomerManager = function() {
             selectedCustomerId = null;
             customerManageModal.classList.add('hidden');
+        };
+
+        window.toggleCustomerPaymentStatus = async function(uid = selectedCustomerId) {
+            if (!uid || !auth.currentUser || (auth.currentUser.email || '').toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return;
+            try {
+                const ref = doc(db, 'users', uid);
+                const snapshot = await getDoc(ref);
+                if (!snapshot.exists()) return;
+                const current = snapshot.data().paymentStatus === 'paid';
+                await setDoc(ref, { paymentStatus: current ? 'unpaid' : 'paid' }, { merge: true });
+                showNotification(current ? 'Cliente marcado como não pago.' : 'Cliente marcado como pago.', 'success');
+                loadCustomers();
+                if (selectedCustomerId === uid && !customerManageModal.classList.contains('hidden')) {
+                    openCustomerManager(uid);
+                }
+            } catch (error) {
+                console.error('Falha ao atualizar pagamento:', error);
+                displayError('Não foi possível atualizar o status do pagamento.');
+            }
         };
 
         window.releaseCustomerDevice = async function() {
@@ -1671,13 +1772,53 @@
                 const customer = snapshot.data();
                 const current = toDate(customer.expiresAt);
                 const base = current && current > new Date() ? current : new Date();
+                const customerName = customer.email || 'este cliente';
+                if (!confirm(`Adicionar ${days} dias ao acesso de ${customerName}?`)) return;
+                const previousActive = customer.active !== false;
                 base.setDate(base.getDate() + days);
-                await setDoc(ref, { active: true, expiresAt: Timestamp.fromDate(base) }, { merge: true });
+                await setDoc(ref, {
+                    active: true,
+                    expiresAt: Timestamp.fromDate(base),
+                    lastRenewalPreviousExpiresAt: current ? Timestamp.fromDate(current) : null,
+                    lastRenewalPreviousActive: previousActive,
+                    lastRenewalAt: serverTimestamp(),
+                    lastRenewalDays: days
+                }, { merge: true });
                 showNotification(`Acesso renovado até ${base.toLocaleDateString('pt-BR')}.`, 'success');
                 loadCustomers();
             } catch (error) {
                 console.error('Falha ao renovar cliente:', error);
                 displayError('Não foi possível renovar esse acesso.');
+            }
+        };
+
+        window.undoLastRenewal = async function() {
+            if (!selectedCustomerId) return;
+            try {
+                const ref = doc(db, 'users', selectedCustomerId);
+                const snapshot = await getDoc(ref);
+                if (!snapshot.exists()) return;
+                const customer = snapshot.data();
+                const previous = toDate(customer.lastRenewalPreviousExpiresAt);
+                if (!previous) {
+                    showNotification('Não há uma renovação recente para desfazer.', 'error');
+                    return;
+                }
+                if (!confirm('Desfazer a última renovação e restaurar a validade anterior?')) return;
+                await setDoc(ref, {
+                    expiresAt: Timestamp.fromDate(previous),
+                    active: customer.lastRenewalPreviousActive !== false,
+                    lastRenewalPreviousExpiresAt: deleteField(),
+                    lastRenewalPreviousActive: deleteField(),
+                    lastRenewalAt: deleteField(),
+                    lastRenewalDays: deleteField()
+                }, { merge: true });
+                showNotification('Última renovação desfeita.', 'success');
+                closeCustomerManager();
+                loadCustomers();
+            } catch (error) {
+                console.error('Falha ao desfazer renovação:', error);
+                displayError('Não foi possível desfazer a renovação.');
             }
         };
 
@@ -1745,6 +1886,7 @@
                     email,
                     role: 'customer',
                     active: true,
+                    paymentStatus: 'unpaid',
                     expiresAt: Timestamp.fromDate(expiration),
                     createdAt: new Date().toISOString()
                 });
@@ -2223,6 +2365,7 @@
                     authStatusEl.textContent = 'Faça login';
                     updateRecordButtonState();
                     showLoginScreen();
+                    clearLoginMessages();
                     return;
                 }
                 try {
@@ -2275,7 +2418,7 @@
 
         async function handleServerAccessDenied() {
             if (auth && auth.currentUser) await signOut(auth);
-            showLoginScreen('Acesso expirado ou bloqueado. Fale com o administrador para renovar.');
+            showLoginScreen('Acesso expirado ou bloqueado. Consulte o administrador para regularizar o acesso.');
         }
 
         function listenForSettings(uid) {
