@@ -2501,15 +2501,21 @@
 
         window.saveRecord = async function() {
             if (addRecordBtn.disabled) return;
+            
+            // Bloqueia o botão instantaneamente para evitar cliques duplos
+            addRecordBtn.disabled = true;
+            addRecordBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
             const date = newDateInput.value;
             let rawHoursInput = parseFloat(newHoursInput.value);
             const isFalta = currentRecordType === 'falta';
 
-            let hours;
-            hours = convertHMMToDecimal(rawHoursInput);
+            let hours = convertHMMToDecimal(rawHoursInput);
             
             if (hours <= 0.001) {
                 displayError("Horas inválidas (formato H.MM). Ex: 5.04 para 5h e 4m.");
+                addRecordBtn.disabled = false;
+                addRecordBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                 return;
             }
             if (isFalta) {
@@ -2522,8 +2528,7 @@
             const accrualMonthKey = getAccrualMonthKey(date); 
 
             try {
-                const originalText = addRecordBtn.textContent;
-                addRecordBtn.innerHTML = isFalta ? 'Registrando...' : 'Registrando...';
+                addRecordBtn.innerHTML = 'Registrando...';
 
                 let tiers = [];
                 let totalPaidHours = 0;
@@ -2553,7 +2558,13 @@
                 };
 
                 if (db) {
-                    const docRef = await addDoc(collection(db, `artifacts/${appId}/users/${userId}/overtime_records`), recordData);
+                    // Atualização Otimista: Dispara para a base de dados sem usar "await" 
+                    // A interface liberta-se imediatamente.
+                    addDoc(collection(db, `artifacts/${appId}/users/${userId}/overtime_records`), recordData)
+                        .catch(e => {
+                            console.error("Erro background:", e);
+                            displayError("Aviso: Falha na sincronização.");
+                        });
                 } else {
                     recordData.id = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                     overtimeRecords.push(recordData);
@@ -2561,6 +2572,7 @@
                     renderMonthlySummaries();
                 }
 
+                // Restaura imediatamente a interface
                 if (isFalta) newHoursInput.value = "8.25"; 
                 else newHoursInput.value = '';
                 manualPremiumCheckbox.checked = false;
@@ -2568,11 +2580,14 @@
                 hoursPreview.textContent = '';
                 
                 updateRecordButtonState();
-                addRecordBtn.textContent = originalText;
+                
+                // Forçamos o texto correto para evitar falhas de cache do HTML
+                addRecordBtn.textContent = isFalta ? 'Registrar Falta' : 'Adicionar Extra';
 
             } catch (e) { 
                 console.error("Erro ao adicionar:", e); 
                 displayError('Erro ao adicionar registro.'); 
+                updateRecordButtonState();
                 addRecordBtn.textContent = isFalta ? 'Registrar Falta' : 'Adicionar Extra';
             }
         }
@@ -2599,15 +2614,28 @@
         window.deleteRecord = async function() {
             try {
                 if (!recordToDelete) return;
+                const idToDelete = recordToDelete.id;
+                
+                // Fecha a janela de exclusão IMEDIATAMENTE (Interface rápida)
+                cancelDelete(); 
+                
                 if (db) {
-                    await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/overtime_records`, recordToDelete.id));
+                    // Dispara a exclusão sem prender a interface (sem "await")
+                    deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/overtime_records`, idToDelete))
+                        .catch(e => {
+                            console.error("Erro background ao apagar:", e);
+                            displayError("Aviso: Falha ao sincronizar a exclusão.");
+                        });
                 } else {
-                    overtimeRecords = overtimeRecords.filter(record => record.id !== recordToDelete.id);
+                    overtimeRecords = overtimeRecords.filter(record => record.id !== idToDelete);
                     persistLocalRecords();
                     renderMonthlySummaries();
                 }
+            } catch (e) { 
+                console.error(e); 
+                displayError('Erro ao deletar.'); 
                 cancelDelete();
-            } catch (e) { console.error(e); displayError('Erro ao deletar.'); }
+            }
         }
         
         // --- MONTH MANAGER LOGIC (COM O CONGELAMENTO INTELIGENTE) ---
@@ -3116,8 +3144,7 @@
                     <div class="bg-gray-900 dark:bg-gray-950 p-4 text-white flex justify-between items-center flex-wrap gap-3 border-b border-gray-700">
                         <div>
                             <div class="flex items-center">
-                                <h3 class="text-base font-bold capitalize"><span class="text-indigo-400">${accrualMonthName}</span></h3>
-                                ${expirationBadge}
+                                <h3 class="text-base font-bold capitalize"><span class="text-indigo-400">${accrualMonthName}</span></h3>${expirationBadge}
                             </div>
                             <div class="text-[10px] font-light text-gray-400 mt-0.5 flex items-center gap-1">
                                 Pgto: <span class="text-indigo-400 font-bold ml-1">${paymentInfo.text}</span>
